@@ -1,0 +1,49 @@
+## Visual Studio / VB.NET .gitignore
+
+# Pastas de build
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options directory
+.vs/
+
+# NuGet packages (restaurados automaticamente)
+packages/
+*.nupkg
+*.snupkg
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Pp]ublish/
+
+# Temporary files
+*~
+*.tmp
+*.temp
+*.cache
+*.bak
+*.orig
+
+# JetBrains
+.idea/
+*.sln.iml
+
+# Crash dumps
+*.dmp
