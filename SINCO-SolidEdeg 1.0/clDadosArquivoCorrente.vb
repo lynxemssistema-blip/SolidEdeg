@@ -1,4 +1,4 @@
-﻿
+
 
 Imports System.IO
 Imports System.Runtime.InteropServices
@@ -249,6 +249,91 @@ EnderecoImagem = VALUES(EnderecoImagem), Bloqueado = VALUES(Bloqueado);"
 
 
             End Using
+
+            '' ============================================================
+            '' 🔹 Integração API Protheus (Criar Produto)
+            '' ============================================================
+            'Try
+            '    ' Ignorar erros de certificado SSL (ambiente de testes/local) e forçar TLS 1.2
+            '    System.Net.ServicePointManager.SecurityProtocol = DirectCast(3072, System.Net.SecurityProtocolType) Or System.Net.SecurityProtocolType.Tls11 Or System.Net.SecurityProtocolType.Tls
+            '    System.Net.ServicePointManager.ServerCertificateValidationCallback = Function(sender, cert, chain, sslPolicyErrors) True
+
+            '    ' 1. Obter Token Bearer
+            '    Dim tokenUrl As String = "https://192.168.1.60:47500/tlpp/oauth2/token?grant_type=password&username=sinco&password=Metal1120"
+            '    Dim tokenRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(tokenUrl), System.Net.HttpWebRequest)
+            '    tokenRequest.Method = "GET"
+            '    tokenRequest.Timeout = 10000 ' 10 segundos timeout
+
+            '    Dim accessToken As String = ""
+            '    Using tokenResponse As System.Net.HttpWebResponse = CType(tokenRequest.GetResponse(), System.Net.HttpWebResponse)
+            '        Using reader As New System.IO.StreamReader(tokenResponse.GetResponseStream())
+            '            Dim responseText As String = reader.ReadToEnd()
+            '            ' Busca simples pelo token no JSON via Regex para evitar dependência externa
+            '            Dim match As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(responseText, """access_token""\s*:\s*""([^""]+)""")
+            '            If match.Success Then
+            '                accessToken = match.Groups(1).Value
+            '            End If
+            '        End Using
+            '    End Using
+
+            '    ' 2. Realizar POST caso tenha obtido o token
+            '    If Not String.IsNullOrEmpty(accessToken) Then
+            '        Dim postUrl As String = "https://192.168.1.60:47500/produtos/create"
+            '        Dim postRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+            '        postRequest.Method = "POST"
+            '        postRequest.ContentType = "application/json"
+            '        postRequest.Headers.Add("Authorization", "Bearer " & accessToken)
+            '        postRequest.Timeout = 15000 ' 15 segundos timeout
+
+            '        ' Montar JSON dinâmico baseado na peça corrente
+            '        Dim descProduto As String = UCase(DadosArquivoCorrente.Titulo)
+            '        If String.IsNullOrEmpty(descProduto) Then descProduto = "PRODUTO XPTO 01"
+            '        Dim codDesenho As String = DadosArquivoCorrente.NomeArquivoSemExtensao
+            '        If String.IsNullOrEmpty(codDesenho) Then codDesenho = "desenho_metalfisa"
+
+            '        ' Substitui aspas e quebras de linha para evitar quebro em JSON mal-formado
+            '        descProduto = descProduto.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
+            '        codDesenho = codDesenho.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
+
+            '        Dim jsonPayload As String = "{" &
+            '            " ""data"": {" &
+            '            "  ""produtos"": [" &
+            '            "   {" &
+            '            "    ""EMPRESA"": ""01""," &
+            '            "    ""CFILANT"": ""01""," &
+            '            "    ""B1_GRUPO"": ""MT2""," &
+            '            "    ""B1_DESC"": """ & descProduto & """," &
+            '            "    ""B1_XREVM"": ""01""," &
+            '            "    ""B1_TIPO"": ""PA""," &
+            '            "    ""B1_UM"": ""UN""," &
+            '            "    ""B1_LOCPAD"": ""03""," &
+            '            "    ""B1_POSIPI"": ""00000000""," &
+            '            "    ""B1_FINALID"": ""1""," &
+            '            "    ""B1_ORIGEM"": ""0""," &
+            '            "    ""B1_XCODDES"": """ & codDesenho & """" &
+            '            "   }" &
+            '            "  ]" &
+            '            " }" &
+            '            "}"
+
+            '        Using writer As New System.IO.StreamWriter(postRequest.GetRequestStream())
+            '            writer.Write(jsonPayload)
+            '        End Using
+
+            '        ' Enviar e ler a resposta do Protheus
+            '        Using postResponse As System.Net.HttpWebResponse = CType(postRequest.GetResponse(), System.Net.HttpWebResponse)
+            '            Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
+            '                Dim responseResult As String = reader.ReadToEnd()
+            '                System.Diagnostics.Debug.WriteLine("SINCO: Produto criado na API Protheus. Resposta: " & responseResult)
+            '            End Using
+            '        End Using
+            '    Else
+            '        System.Diagnostics.Debug.WriteLine("SINCO: Falha ao obter token de acesso na API Protheus.")
+            '    End If
+            'Catch exAPI As Exception
+            '    ' Apenas loga o erro, para não travar o processo principal de salvamento (MySQL)
+            '    System.Diagnostics.Debug.WriteLine("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
+            'End Try
 
         Catch ex As Exception
 

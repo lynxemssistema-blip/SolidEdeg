@@ -42,6 +42,15 @@ Partial Class frmDadosPecaCorrente
         Me.btnLimpar = New System.Windows.Forms.Button()
         Me.TabControlPrincipal = New System.Windows.Forms.TabControl()
         Me.TabPage1 = New System.Windows.Forms.TabPage()
+        Me.btnSalvarCadProtheus = New System.Windows.Forms.Button()
+        Me.txtB1_XREVM = New System.Windows.Forms.TextBox()
+        Me.Label50 = New System.Windows.Forms.Label()
+        Me.cboB1_GRUPO = New System.Windows.Forms.ComboBox()
+        Me.Label49 = New System.Windows.Forms.Label()
+        Me.cboB1_UM = New System.Windows.Forms.ComboBox()
+        Me.Label48 = New System.Windows.Forms.Label()
+        Me.cboB1_TIPO = New System.Windows.Forms.ComboBox()
+        Me.Label47 = New System.Windows.Forms.Label()
         Me.btnPdfLote = New System.Windows.Forms.Button()
         Me.btnEstrutraMaterialProtheus = New System.Windows.Forms.Button()
         Me.btnBuscarOperacaoProtheus = New System.Windows.Forms.Button()
@@ -263,6 +272,7 @@ Partial Class frmDadosPecaCorrente
         Me.TimerdgvGabaritos = New System.Windows.Forms.Timer(Me.components)
         Me.DataGridViewImageColumn1 = New System.Windows.Forms.DataGridViewImageColumn()
         Me.DataGridViewImageColumn2 = New System.Windows.Forms.DataGridViewImageColumn()
+        Me.Button8 = New System.Windows.Forms.Button()
         CType(Me.dgvDadosPecas, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.mnudgvDadosPecas.SuspendLayout()
         Me.TabControlPrincipal.SuspendLayout()
@@ -468,6 +478,16 @@ Partial Class frmDadosPecaCorrente
         '
         'TabPage1
         '
+        Me.TabPage1.Controls.Add(Me.Button8)
+        Me.TabPage1.Controls.Add(Me.btnSalvarCadProtheus)
+        Me.TabPage1.Controls.Add(Me.txtB1_XREVM)
+        Me.TabPage1.Controls.Add(Me.Label50)
+        Me.TabPage1.Controls.Add(Me.cboB1_GRUPO)
+        Me.TabPage1.Controls.Add(Me.Label49)
+        Me.TabPage1.Controls.Add(Me.cboB1_UM)
+        Me.TabPage1.Controls.Add(Me.Label48)
+        Me.TabPage1.Controls.Add(Me.cboB1_TIPO)
+        Me.TabPage1.Controls.Add(Me.Label47)
         Me.TabPage1.Controls.Add(Me.btnPdfLote)
         Me.TabPage1.Controls.Add(Me.btnEstrutraMaterialProtheus)
         Me.TabPage1.Controls.Add(Me.btnBuscarOperacaoProtheus)
@@ -546,13 +566,96 @@ Partial Class frmDadosPecaCorrente
         Me.TabPage1.Text = "Dados Arquivo Corrente"
         Me.TabPage1.UseVisualStyleBackColor = True
         '
+        'btnSalvarCadProtheus
+        '
+        Me.btnSalvarCadProtheus.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.salvar
+        Me.btnSalvarCadProtheus.Location = New System.Drawing.Point(166, 6)
+        Me.btnSalvarCadProtheus.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
+        Me.btnSalvarCadProtheus.Name = "btnSalvarCadProtheus"
+        Me.btnSalvarCadProtheus.Size = New System.Drawing.Size(135, 50)
+        Me.btnSalvarCadProtheus.TabIndex = 96
+        Me.btnSalvarCadProtheus.Text = "Buscar Cod. - Protheus"
+        Me.btnSalvarCadProtheus.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
+        Me.btnSalvarCadProtheus.UseVisualStyleBackColor = True
+        '
+        'txtB1_XREVM
+        '
+        Me.txtB1_XREVM.Location = New System.Drawing.Point(1311, 134)
+        Me.txtB1_XREVM.Name = "txtB1_XREVM"
+        Me.txtB1_XREVM.Size = New System.Drawing.Size(100, 22)
+        Me.txtB1_XREVM.TabIndex = 95
+        Me.txtB1_XREVM.Text = "00"
+        '
+        'Label50
+        '
+        Me.Label50.AutoSize = True
+        Me.Label50.Location = New System.Drawing.Point(1312, 115)
+        Me.Label50.Name = "Label50"
+        Me.Label50.Size = New System.Drawing.Size(95, 16)
+        Me.Label50.TabIndex = 94
+        Me.Label50.Text = "Rev. Metalfisa:"
+        '
+        'cboB1_GRUPO
+        '
+        Me.cboB1_GRUPO.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.cboB1_GRUPO.FormattingEnabled = True
+        Me.cboB1_GRUPO.Location = New System.Drawing.Point(487, 134)
+        Me.cboB1_GRUPO.Name = "cboB1_GRUPO"
+        Me.cboB1_GRUPO.Size = New System.Drawing.Size(322, 24)
+        Me.cboB1_GRUPO.TabIndex = 93
+        '
+        'Label49
+        '
+        Me.Label49.AutoSize = True
+        Me.Label49.Location = New System.Drawing.Point(488, 116)
+        Me.Label49.Name = "Label49"
+        Me.Label49.Size = New System.Drawing.Size(47, 16)
+        Me.Label49.TabIndex = 92
+        Me.Label49.Text = "Grupo:"
+        '
+        'cboB1_UM
+        '
+        Me.cboB1_UM.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.cboB1_UM.FormattingEnabled = True
+        Me.cboB1_UM.Location = New System.Drawing.Point(260, 134)
+        Me.cboB1_UM.Name = "cboB1_UM"
+        Me.cboB1_UM.Size = New System.Drawing.Size(221, 24)
+        Me.cboB1_UM.TabIndex = 91
+        '
+        'Label48
+        '
+        Me.Label48.AutoSize = True
+        Me.Label48.Location = New System.Drawing.Point(262, 116)
+        Me.Label48.Name = "Label48"
+        Me.Label48.Size = New System.Drawing.Size(62, 16)
+        Me.Label48.TabIndex = 90
+        Me.Label48.Text = "Unidade:"
+        '
+        'cboB1_TIPO
+        '
+        Me.cboB1_TIPO.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.cboB1_TIPO.FormattingEnabled = True
+        Me.cboB1_TIPO.Location = New System.Drawing.Point(11, 134)
+        Me.cboB1_TIPO.Name = "cboB1_TIPO"
+        Me.cboB1_TIPO.Size = New System.Drawing.Size(243, 24)
+        Me.cboB1_TIPO.TabIndex = 89
+        '
+        'Label47
+        '
+        Me.Label47.AutoSize = True
+        Me.Label47.Location = New System.Drawing.Point(8, 116)
+        Me.Label47.Name = "Label47"
+        Me.Label47.Size = New System.Drawing.Size(38, 16)
+        Me.Label47.TabIndex = 88
+        Me.Label47.Text = "Tipo:"
+        '
         'btnPdfLote
         '
         Me.btnPdfLote.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.pdf
-        Me.btnPdfLote.Location = New System.Drawing.Point(934, 7)
+        Me.btnPdfLote.Location = New System.Drawing.Point(1084, 7)
         Me.btnPdfLote.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnPdfLote.Name = "btnPdfLote"
-        Me.btnPdfLote.Size = New System.Drawing.Size(149, 50)
+        Me.btnPdfLote.Size = New System.Drawing.Size(135, 50)
         Me.btnPdfLote.TabIndex = 87
         Me.btnPdfLote.Text = "Gerar PDF Lote"
         Me.btnPdfLote.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
@@ -684,9 +787,9 @@ Partial Class frmDadosPecaCorrente
         '
         'btnProjetoProtheus
         '
-        Me.btnProjetoProtheus.Location = New System.Drawing.Point(786, 7)
+        Me.btnProjetoProtheus.Location = New System.Drawing.Point(936, 7)
         Me.btnProjetoProtheus.Name = "btnProjetoProtheus"
-        Me.btnProjetoProtheus.Size = New System.Drawing.Size(142, 49)
+        Me.btnProjetoProtheus.Size = New System.Drawing.Size(128, 49)
         Me.btnProjetoProtheus.TabIndex = 83
         Me.btnProjetoProtheus.Text = "Projeto Protheus"
         Me.btnProjetoProtheus.UseVisualStyleBackColor = True
@@ -909,7 +1012,7 @@ Partial Class frmDadosPecaCorrente
         '
         'Button5
         '
-        Me.Button5.Location = New System.Drawing.Point(785, 32)
+        Me.Button5.Location = New System.Drawing.Point(935, 32)
         Me.Button5.Margin = New System.Windows.Forms.Padding(4)
         Me.Button5.Name = "Button5"
         Me.Button5.Size = New System.Drawing.Size(145, 50)
@@ -939,10 +1042,10 @@ Partial Class frmDadosPecaCorrente
         'btnConverterChapa
         '
         Me.btnConverterChapa.Enabled = False
-        Me.btnConverterChapa.Location = New System.Drawing.Point(785, 6)
+        Me.btnConverterChapa.Location = New System.Drawing.Point(935, 6)
         Me.btnConverterChapa.Margin = New System.Windows.Forms.Padding(4)
         Me.btnConverterChapa.Name = "btnConverterChapa"
-        Me.btnConverterChapa.Size = New System.Drawing.Size(145, 50)
+        Me.btnConverterChapa.Size = New System.Drawing.Size(131, 50)
         Me.btnConverterChapa.TabIndex = 73
         Me.btnConverterChapa.Text = "Tentar Converter em Chapa"
         Me.btnConverterChapa.UseVisualStyleBackColor = True
@@ -952,7 +1055,7 @@ Partial Class frmDadosPecaCorrente
         '
         Me.cboBloqueado.FormattingEnabled = True
         Me.cboBloqueado.Items.AddRange(New Object() {"SIM", "NÃO"})
-        Me.cboBloqueado.Location = New System.Drawing.Point(10, 132)
+        Me.cboBloqueado.Location = New System.Drawing.Point(1109, 178)
         Me.cboBloqueado.Name = "cboBloqueado"
         Me.cboBloqueado.Size = New System.Drawing.Size(121, 24)
         Me.cboBloqueado.TabIndex = 72
@@ -963,7 +1066,7 @@ Partial Class frmDadosPecaCorrente
         'Label39
         '
         Me.Label39.AutoSize = True
-        Me.Label39.Location = New System.Drawing.Point(11, 111)
+        Me.Label39.Location = New System.Drawing.Point(1110, 157)
         Me.Label39.Name = "Label39"
         Me.Label39.Size = New System.Drawing.Size(77, 16)
         Me.Label39.TabIndex = 71
@@ -973,7 +1076,7 @@ Partial Class frmDadosPecaCorrente
         '
         Me.TextBox1.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.TextBox1.Location = New System.Drawing.Point(1109, 10)
+        Me.TextBox1.Location = New System.Drawing.Point(1259, 10)
         Me.TextBox1.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.TextBox1.Multiline = True
         Me.TextBox1.Name = "TextBox1"
@@ -983,10 +1086,10 @@ Partial Class frmDadosPecaCorrente
         '
         'btnCriaPropriedadePadroes
         '
-        Me.btnCriaPropriedadePadroes.Location = New System.Drawing.Point(633, 6)
+        Me.btnCriaPropriedadePadroes.Location = New System.Drawing.Point(783, 6)
         Me.btnCriaPropriedadePadroes.Margin = New System.Windows.Forms.Padding(4)
         Me.btnCriaPropriedadePadroes.Name = "btnCriaPropriedadePadroes"
-        Me.btnCriaPropriedadePadroes.Size = New System.Drawing.Size(145, 50)
+        Me.btnCriaPropriedadePadroes.Size = New System.Drawing.Size(131, 50)
         Me.btnCriaPropriedadePadroes.TabIndex = 70
         Me.btnCriaPropriedadePadroes.Text = "Ativar/Criar Propriedades"
         Me.btnCriaPropriedadePadroes.UseVisualStyleBackColor = True
@@ -1159,7 +1262,7 @@ Partial Class frmDadosPecaCorrente
         Me.btnSalvar.Location = New System.Drawing.Point(11, 6)
         Me.btnSalvar.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnSalvar.Name = "btnSalvar"
-        Me.btnSalvar.Size = New System.Drawing.Size(149, 50)
+        Me.btnSalvar.Size = New System.Drawing.Size(135, 50)
         Me.btnSalvar.TabIndex = 54
         Me.btnSalvar.Text = "Salvar - SINCO"
         Me.btnSalvar.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
@@ -1185,6 +1288,7 @@ Partial Class frmDadosPecaCorrente
         Me.Label19.Size = New System.Drawing.Size(58, 16)
         Me.Label19.TabIndex = 53
         Me.Label19.Text = "Material:"
+        Me.Label19.Visible = False
         '
         'txtMaterialSw
         '
@@ -1195,6 +1299,7 @@ Partial Class frmDadosPecaCorrente
         Me.txtMaterialSw.Name = "txtMaterialSw"
         Me.txtMaterialSw.Size = New System.Drawing.Size(538, 22)
         Me.txtMaterialSw.TabIndex = 11
+        Me.txtMaterialSw.Visible = False
         '
         'txtAreametroquadr
         '
@@ -1386,16 +1491,16 @@ Partial Class frmDadosPecaCorrente
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.txtendereco.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
         Me.txtendereco.Enabled = False
-        Me.txtendereco.Location = New System.Drawing.Point(664, 132)
+        Me.txtendereco.Location = New System.Drawing.Point(1422, 135)
         Me.txtendereco.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.txtendereco.Name = "txtendereco"
-        Me.txtendereco.Size = New System.Drawing.Size(899, 22)
+        Me.txtendereco.Size = New System.Drawing.Size(141, 22)
         Me.txtendereco.TabIndex = 19
         '
         'Label8
         '
         Me.Label8.AutoSize = True
-        Me.Label8.Location = New System.Drawing.Point(660, 111)
+        Me.Label8.Location = New System.Drawing.Point(1419, 115)
         Me.Label8.Name = "Label8"
         Me.Label8.Size = New System.Drawing.Size(69, 16)
         Me.Label8.TabIndex = 30
@@ -1471,7 +1576,7 @@ Partial Class frmDadosPecaCorrente
         '
         Me.txtNumeroDesenho.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
         Me.txtNumeroDesenho.Enabled = False
-        Me.txtNumeroDesenho.Location = New System.Drawing.Point(463, 134)
+        Me.txtNumeroDesenho.Location = New System.Drawing.Point(1110, 135)
         Me.txtNumeroDesenho.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.txtNumeroDesenho.Name = "txtNumeroDesenho"
         Me.txtNumeroDesenho.Size = New System.Drawing.Size(195, 22)
@@ -1480,7 +1585,7 @@ Partial Class frmDadosPecaCorrente
         'Label3
         '
         Me.Label3.AutoSize = True
-        Me.Label3.Location = New System.Drawing.Point(463, 111)
+        Me.Label3.Location = New System.Drawing.Point(1110, 116)
         Me.Label3.Name = "Label3"
         Me.Label3.Size = New System.Drawing.Size(130, 16)
         Me.Label3.TabIndex = 20
@@ -1489,17 +1594,18 @@ Partial Class frmDadosPecaCorrente
         'txtTitulo
         '
         Me.txtTitulo.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
-        Me.txtTitulo.Location = New System.Drawing.Point(150, 134)
+        Me.txtTitulo.Font = New System.Drawing.Font("Arial Narrow", 7.8!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtTitulo.Location = New System.Drawing.Point(815, 135)
         Me.txtTitulo.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.txtTitulo.Name = "txtTitulo"
-        Me.txtTitulo.Size = New System.Drawing.Size(301, 22)
+        Me.txtTitulo.Size = New System.Drawing.Size(289, 22)
         Me.txtTitulo.TabIndex = 0
         Me.txtTitulo.Tag = "SummaryInformation - Título"
         '
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.Location = New System.Drawing.Point(148, 111)
+        Me.Label1.Location = New System.Drawing.Point(801, 116)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(43, 16)
         Me.Label1.TabIndex = 18
@@ -1508,10 +1614,10 @@ Partial Class frmDadosPecaCorrente
         'btnAbriDetalhamentoCorrente
         '
         Me.btnAbriDetalhamentoCorrente.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.par
-        Me.btnAbriDetalhamentoCorrente.Location = New System.Drawing.Point(165, 6)
+        Me.btnAbriDetalhamentoCorrente.Location = New System.Drawing.Point(396, 6)
         Me.btnAbriDetalhamentoCorrente.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnAbriDetalhamentoCorrente.Name = "btnAbriDetalhamentoCorrente"
-        Me.btnAbriDetalhamentoCorrente.Size = New System.Drawing.Size(149, 50)
+        Me.btnAbriDetalhamentoCorrente.Size = New System.Drawing.Size(54, 50)
         Me.btnAbriDetalhamentoCorrente.TabIndex = 12
         Me.btnAbriDetalhamentoCorrente.Text = "Abrir DFT"
         Me.btnAbriDetalhamentoCorrente.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
@@ -1522,10 +1628,10 @@ Partial Class frmDadosPecaCorrente
         'btnGerarPdf
         '
         Me.btnGerarPdf.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.pdf
-        Me.btnGerarPdf.Location = New System.Drawing.Point(323, 6)
+        Me.btnGerarPdf.Location = New System.Drawing.Point(473, 6)
         Me.btnGerarPdf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnGerarPdf.Name = "btnGerarPdf"
-        Me.btnGerarPdf.Size = New System.Drawing.Size(149, 50)
+        Me.btnGerarPdf.Size = New System.Drawing.Size(135, 50)
         Me.btnGerarPdf.TabIndex = 3
         Me.btnGerarPdf.Text = "Gerar PDF"
         Me.btnGerarPdf.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
@@ -1536,10 +1642,10 @@ Partial Class frmDadosPecaCorrente
         'btnDxf
         '
         Me.btnDxf.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.dxf
-        Me.btnDxf.Location = New System.Drawing.Point(477, 6)
+        Me.btnDxf.Location = New System.Drawing.Point(627, 6)
         Me.btnDxf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnDxf.Name = "btnDxf"
-        Me.btnDxf.Size = New System.Drawing.Size(149, 50)
+        Me.btnDxf.Size = New System.Drawing.Size(135, 50)
         Me.btnDxf.TabIndex = 0
         Me.btnDxf.Text = "Gerar dxf"
         Me.btnDxf.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
@@ -2764,6 +2870,15 @@ Partial Class frmDadosPecaCorrente
         Me.DataGridViewImageColumn2.ReadOnly = True
         Me.DataGridViewImageColumn2.Width = 25
         '
+        'Button8
+        '
+        Me.Button8.Location = New System.Drawing.Point(307, 5)
+        Me.Button8.Name = "Button8"
+        Me.Button8.Size = New System.Drawing.Size(82, 48)
+        Me.Button8.TabIndex = 97
+        Me.Button8.Text = "Button8"
+        Me.Button8.UseVisualStyleBackColor = True
+        '
         'frmDadosPecaCorrente
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 16.0!)
@@ -3057,4 +3172,14 @@ Partial Class frmDadosPecaCorrente
     Friend WithEvents btnPdfLote As Windows.Forms.Button
     Friend WithEvents MarcarComoNovoRevisaoToolStripMenuItem As Windows.Forms.ToolStripMenuItem
     Friend WithEvents ProgressBarOSM As Windows.Forms.ProgressBar
+    Friend WithEvents cboB1_TIPO As Windows.Forms.ComboBox
+    Friend WithEvents Label47 As Windows.Forms.Label
+    Friend WithEvents cboB1_UM As Windows.Forms.ComboBox
+    Friend WithEvents Label48 As Windows.Forms.Label
+    Friend WithEvents cboB1_GRUPO As Windows.Forms.ComboBox
+    Friend WithEvents Label49 As Windows.Forms.Label
+    Friend WithEvents txtB1_XREVM As Windows.Forms.TextBox
+    Friend WithEvents Label50 As Windows.Forms.Label
+    Friend WithEvents btnSalvarCadProtheus As Windows.Forms.Button
+    Friend WithEvents Button8 As Windows.Forms.Button
 End Class

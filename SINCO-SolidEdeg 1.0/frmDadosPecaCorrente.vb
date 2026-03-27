@@ -1,4 +1,4 @@
-﻿Imports System.Data
+Imports System.Data
 Imports System.Drawing
 Imports System.Globalization
 Imports System.IO
@@ -26,6 +26,7 @@ Imports Environment = System.Environment
 Imports Font = System.Drawing.Font
 Imports Path = System.IO.Path
 Imports Thread = System.Threading.Thread
+Imports Newtonsoft.Json
 
 
 
@@ -124,6 +125,92 @@ Public Class frmDadosPecaCorrente
 
         ' ListarTodasPropriedadesDoArquivo(TextBox1)
 
+        Try
+            Dim connString As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
+
+            Dim dtGrupo As New System.Data.DataTable()
+            Dim dtTipo As New System.Data.DataTable()
+            Dim dtUM As New System.Data.DataTable()
+
+            Using conn As New Npgsql.NpgsqlConnection(connString)
+                conn.Open()
+
+                ' 1. Busca os grupos na tabela SBM010
+                Dim sqlGrupo As String = "SELECT BM_GRUPO AS ""Código"", BM_DESC AS ""Descrição"" FROM public.SBM010 WHERE D_E_L_E_T_ = ' ' ORDER BY BM_GRUPO"
+                Using cmdGrupo As New Npgsql.NpgsqlCommand(sqlGrupo, conn)
+                    Using daGrupo As New Npgsql.NpgsqlDataAdapter(cmdGrupo)
+                        daGrupo.Fill(dtGrupo)
+                    End Using
+                End Using
+
+                ' 2. Busca Tipos de Produto na tabela SX5010 (X5_TABELA = '02')
+                Dim sqlTipo As String = "SELECT X5_CHAVE AS ""Código_Tipo"", X5_DESCRI AS ""Descrição"" FROM public.SX5010 WHERE X5_TABELA = '02' AND D_E_L_E_T_ = ' ' ORDER BY X5_CHAVE"
+                Using cmdTipo As New Npgsql.NpgsqlCommand(sqlTipo, conn)
+                    Using daTipo As New Npgsql.NpgsqlDataAdapter(cmdTipo)
+                        daTipo.Fill(dtTipo)
+                    End Using
+                End Using
+
+                ' 3. Busca Unidades de Medida na tabela SAH010
+                Dim sqlUM As String = "SELECT AH_UNIMED AS ""Codigo_UM"", AH_UMRES AS ""Descrição"" FROM public.SAH010 WHERE D_E_L_E_T_ = ' ' ORDER BY AH_UNIMED"
+                Using cmdUM As New Npgsql.NpgsqlCommand(sqlUM, conn)
+                    Using daUM As New Npgsql.NpgsqlDataAdapter(cmdUM)
+                        daUM.Fill(dtUM)
+                    End Using
+                End Using
+            End Using
+
+            ' ================= BINDING GRUPO =================
+            If Not dtGrupo.Columns.Contains("DescricaoExibicao") Then dtGrupo.Columns.Add("DescricaoExibicao", GetType(String))
+            For Each row As System.Data.DataRow In dtGrupo.Rows
+                Dim codGrupo As String = If(row("Código") IsNot DBNull.Value, row("Código").ToString().Trim(), "")
+                Dim descGrupo As String = If(row("Descrição") IsNot DBNull.Value, row("Descrição").ToString().Trim(), "")
+                row("DescricaoExibicao") = $"{codGrupo} - {descGrupo}"
+            Next
+            With cboB1_GRUPO
+                .DataSource = dtGrupo
+                .DisplayMember = "DescricaoExibicao"
+                .ValueMember = "Código"
+                .SelectedIndex = -1
+            End With
+
+            ' ================= BINDING TIPO =================
+            If Not dtTipo.Columns.Contains("DescricaoExibicao") Then dtTipo.Columns.Add("DescricaoExibicao", GetType(String))
+            For Each row As System.Data.DataRow In dtTipo.Rows
+                Dim codTipo As String = If(row("Código_Tipo") IsNot DBNull.Value, row("Código_Tipo").ToString().Trim(), "")
+                Dim descTipo As String = ""
+                If dtTipo.Columns.Contains("Descrição") Then descTipo = If(row("Descrição") IsNot DBNull.Value, row("Descrição").ToString().Trim(), "")
+
+                ' Exibe "Codigo - Descrição" se a descrição for encontrada, caso contrário mostra só o código
+                row("DescricaoExibicao") = If(descTipo <> "", $"{codTipo} - {descTipo}", codTipo)
+            Next
+            With cboB1_TIPO
+                .DataSource = dtTipo
+                .DisplayMember = "DescricaoExibicao"
+                .ValueMember = "Código_Tipo"
+                .SelectedIndex = -1
+            End With
+
+            ' ================= BINDING UM =================
+            If Not dtUM.Columns.Contains("DescricaoExibicao") Then dtUM.Columns.Add("DescricaoExibicao", GetType(String))
+            For Each row As System.Data.DataRow In dtUM.Rows
+                Dim codUM As String = If(row("Codigo_UM") IsNot DBNull.Value, row("Codigo_UM").ToString().Trim(), "")
+                Dim descUM As String = ""
+                If dtUM.Columns.Contains("Descrição") Then descUM = If(row("Descrição") IsNot DBNull.Value, row("Descrição").ToString().Trim(), "")
+
+                ' Exibe "Codigo - Descrição" se a descrição for encontrada, caso contrário mostra só o código
+                row("DescricaoExibicao") = If(descUM <> "", $"{codUM} - {descUM}", codUM)
+            Next
+            With cboB1_UM
+                .DataSource = dtUM
+                .DisplayMember = "DescricaoExibicao"
+                .ValueMember = "Codigo_UM"
+                .SelectedIndex = -1
+            End With
+
+        Catch ex As Exception
+            MsgBox("Erro ao carregar listas do Protheus (Grupo, Tipo, UM):" & Environment.NewLine & ex.Message, MsgBoxStyle.Critical, "Erro")
+        End Try
 
 
     End Sub
@@ -811,8 +898,6 @@ Public Class frmDadosPecaCorrente
         'tenta ativa o maximo as variaveis do solid edge
         AtivarVariaveisESincronizarPropriedades()
 
-
-
         Try
             timerAtualizacao.Interval = 2000
             timerAtualizacao.Start()
@@ -836,7 +921,6 @@ Public Class frmDadosPecaCorrente
             txtNumeroDesenho.Text = NomeArquivo & ext
             txtendereco.Text = caminho
 
-
             ' 👉 Nenhuma leitura suja aqui! Delega para o Reader Service:
             Dim leitor As New SolidEdgeReaderService()
             leitor.ExtrairPropriedades(doc, DadosArquivoCorrente)
@@ -851,22 +935,29 @@ Public Class frmDadosPecaCorrente
             txtGerente.Text = DadosArquivoCorrente.Aprovado
             txtMaterialSw.Text = DadosArquivoCorrente.material
             cboTipoDesenho.Text = DadosArquivoCorrente.TipoDesenho
-
             txtData.Text = DadosArquivoCorrente.DataCriacaDesenho
             txtDataR.Text = DadosArquivoCorrente.DataUltimoSalvamento
-
             txtCutSizex.Text = DadosArquivoCorrente.ComprimentoBlank
             txtCutSizey.Text = DadosArquivoCorrente.LarguraBlank
             txtEspessura.Text = DadosArquivoCorrente.Espessura
             txtPesoKg.Text = DadosArquivoCorrente.Massa
             txtAreametroquadr.Text = DadosArquivoCorrente.AreaPintura
 
+            cl_BancoDados.RetornaCampoDaPesquisa("SELECT B1_GRUPO,B1_XREVM,B1_TIPO,B1_UM FROM public.sb1010 where B1_COD 
+                          ='" & txtNumeroDesenho.Text & "'",
+                                                 "B1_GRUPO",
+                                                 "B1_XREVM",
+                                                 "B1_TIPO",
+                                                 "B1_UM")
+
+            Me.cboB1_GRUPO.Text = VCampo0.ToString.Trim
+            Me.txtB1_XREVM.Text = VCampo1.ToString.Trim
+            Me.cboB1_TIPO.Text = VCampo2.ToString.Trim
+            Me.cboB1_UM.Text = VCampo3.ToString.Trim
 
             ' 🔹 Atualiza apenas no final
             bloqueiaEventosUI = False
             Me.ResumeLayout()
-
-
 
             ' 🔹 Roda verificação em background
             VerificaCadastroArquivo()
@@ -874,10 +965,22 @@ Public Class frmDadosPecaCorrente
         Catch ex As Exception
 
         Finally
-            'MessageBox.Show("Erro ao carregar propriedades: " & ex.Message,
+
+            'MessageBox.Show("Erro ao carregar propriedades:  " & ex.Message,
             '            "SINCO - Solid Edge", MessageBoxButtons.OK, MessageBoxIcon.Error)
+
         End Try
     End Sub
+
+    Public Function CorrigirUTF8(textoErrado As String) As String
+        If String.IsNullOrEmpty(textoErrado) Then Return ""
+
+        ' Transforma a string errada em bytes usando o encoding ocidental (Latin1)
+        Dim bytes As Byte() = Encoding.GetEncoding("ISO-8859-1").GetBytes(textoErrado)
+
+        ' Converte esses bytes de volta para String usando UTF-8
+        Return Encoding.UTF8.GetString(bytes)
+    End Function
 
     Private Sub LimaprCampos()
 
@@ -1670,28 +1773,63 @@ Public Class frmDadosPecaCorrente
         End If
     End Sub
     Private Sub btnSalvar_Click(sender As Object, e As EventArgs) Handles btnSalvar.Click
-
-
         Try
 
+            ' ============================================================
+            ' 🔹 Verificar se o Produto já existe no Protheus (B1_COD)
+            ' ============================================================
             Try
-                DadosArquivoCorrente.SalvarCorrente()
+                ' Pega o nome do arquivo puro sem extensão
+                Dim codigoPeca As String = DadosArquivoCorrente.NomeArquivoSemExtensao
 
-                VerificaCadastroArquivo()
+                If Not String.IsNullOrWhiteSpace(codigoPeca) Then
+                    Dim connString As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
+                    Dim jaExiste As Boolean = False
 
-                cl_BancoDados.FormataBtnMsg("Registro Salvo Com Sucesso!", 1, btnMsg, TimerbtnMsg)
+                    Using conn As New Npgsql.NpgsqlConnection(connString)
+                        conn.Open()
 
-            Catch ex As Exception
+                        ' Busca na tabela de Produtos do Protheus (SB1010) pela coluna B1_COD
+                        Dim sqlVerifica As String = "SELECT COUNT(*) FROM public.SB1010 WHERE TRIM(B1_COD) = @Codigo AND D_E_L_E_T_ = ' '"
+                        Using cmd As New Npgsql.NpgsqlCommand(sqlVerifica, conn)
+                            cmd.Parameters.AddWithValue("@Codigo", codigoPeca.Trim())
+                            Dim count As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                            If count > 0 Then
+                                jaExiste = True
 
+                            End If
+                        End Using
+                    End Using
+
+                    If jaExiste Then
+
+                        '    MsgBox("Atenção: O registro '" & codigoPeca & "' JÁ EXISTE no Protheus!", MsgBoxStyle.Exclamation, "Integração Protheus")
+
+                        Try
+                            DadosArquivoCorrente.SalvarCorrente()
+                            VerificaCadastroArquivo()
+                            cl_BancoDados.FormataBtnMsg("Registro Salvo Com Sucesso!", 1, btnMsg, TimerbtnMsg)
+                        Catch ex As Exception
+                            ' Tratamento silencioso original mantido
+
+
+                        End Try
+                    Else
+
+
+                        MsgBox("O registro '" & codigoPeca & "' NÃO existe no Protheus, a ", MsgBoxStyle.Information, "Integração Protheus")
+
+
+
+                    End If
+
+                End If
+
+            Catch exProtheus As Exception
+                MsgBox("Erro ao verificar código no Protheus: " & exProtheus.Message, MsgBoxStyle.Critical, "Erro Protheus")
             End Try
 
-
-
-
-        Catch ex As Exception
-
-        Finally
-
+        Catch exGeral As Exception
         End Try
 
     End Sub
@@ -7344,6 +7482,197 @@ Finalizar:
                 seApp.ScreenUpdating = True
                 seApp.DisplayAlerts = True
             End If
+        End Try
+
+    End Sub
+
+    Private Sub btnSalvarCadProtheus_Click(sender As Object, e As EventArgs) Handles btnSalvarCadProtheus.Click
+
+
+
+
+        ' ============================================================
+        ' 🔹 Integração API Protheus (Criar Produto)
+        ' ============================================================
+        Try
+            ' Ignorar erros de certificado SSL (ambiente de testes/local) e forçar TLS 1.2
+            System.Net.ServicePointManager.SecurityProtocol = DirectCast(3072, System.Net.SecurityProtocolType) Or System.Net.SecurityProtocolType.Tls11 Or System.Net.SecurityProtocolType.Tls
+            System.Net.ServicePointManager.ServerCertificateValidationCallback = Function(s, cert, chain, sslPolicyErrors) True
+
+            ' 1. Obter Token Bearer
+            Dim tokenUrl As String = "https://192.168.1.60:47500/tlpp/oauth2/token?grant_type=password&username=sinco&password=Metal1120"
+            Dim tokenRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(tokenUrl), System.Net.HttpWebRequest)
+            tokenRequest.Method = "GET"
+            tokenRequest.Timeout = 10000 ' 10 segundos timeout
+
+            Dim accessToken As String = ""
+            Using tokenResponse As System.Net.HttpWebResponse = CType(tokenRequest.GetResponse(), System.Net.HttpWebResponse)
+                Using reader As New System.IO.StreamReader(tokenResponse.GetResponseStream())
+                    Dim responseText As String = reader.ReadToEnd()
+                    ' Busca simples pelo token no JSON via Regex para evitar dependência externa
+                    Dim match As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(responseText, """access_token""\s*:\s*""([^""]+)""")
+                    If match.Success Then
+                        accessToken = match.Groups(1).Value
+                    End If
+                End Using
+            End Using
+
+            ' 2. Realizar POST caso tenha obtido o token
+            If Not String.IsNullOrEmpty(accessToken) Then
+                Dim postUrl As String = "https://192.168.1.60:47500/produtos/create"
+                Dim postRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+                postRequest.Method = "POST"
+                postRequest.ContentType = "application/json"
+                postRequest.Headers.Add("Authorization", "Bearer " & accessToken)
+                postRequest.Timeout = 15000 ' 15 segundos timeout
+
+                ' Montar JSON dinâmico baseado na peça corrente com higienização p/ evitar JSON quebrado
+                Dim tituloLimpo As String = UCase(DadosArquivoCorrente.Titulo).Trim()
+                tituloLimpo = tituloLimpo.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
+
+                Dim codDesenho As String = DadosArquivoCorrente.NomeArquivoSemExtensao
+                If String.IsNullOrEmpty(codDesenho) Then codDesenho = "desenho_metalfisa"
+                codDesenho = codDesenho.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
+
+                ' Captura com segurança apenas o Código selecionado (seja do ValueMember ou do Text digitado se nulo)
+                ' E pega apenas o PRIMEIRO grupo de caracteres (antes de espaço ou hífen).
+                Dim valGrupo As String = If(cboB1_GRUPO.SelectedValue IsNot Nothing, cboB1_GRUPO.SelectedValue.ToString(), cboB1_GRUPO.Text)
+                valGrupo = If(String.IsNullOrWhiteSpace(valGrupo), "", valGrupo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+                Dim valTipo As String = If(cboB1_TIPO.SelectedValue IsNot Nothing, cboB1_TIPO.SelectedValue.ToString(), cboB1_TIPO.Text)
+                valTipo = If(String.IsNullOrWhiteSpace(valTipo), "", valTipo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+                Dim valUM As String = If(cboB1_UM.SelectedValue IsNot Nothing, cboB1_UM.SelectedValue.ToString(), cboB1_UM.Text)
+                valUM = If(String.IsNullOrWhiteSpace(valUM), "", valUM.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+
+                If valGrupo.ToString = "" Or valTipo.ToString = "" Or valUM.ToString = "" Then
+
+                    MsgBox("Os campos de tipo, Unidade e Grupo, não de preenchimento Obrigatorio.", vbInformation)
+
+                    Exit Sub
+
+                End If
+
+
+
+                'Validação de dados
+                If tituloLimpo.ToString = "" Then
+
+                    MsgBox("O Titulo do desenho e de preenchimento Obrigatorio", "Atenção")
+
+                    Exit Sub
+
+                End If
+
+                ' Use CultureInfo.InvariantCulture para garantir que o ponto seja sempre o separador decimal
+                Dim pesoFormatado As String = DadosArquivoCorrente.PesoTotal.ToString(System.Globalization.CultureInfo.InvariantCulture)
+
+                Dim jsonPayload As String = "{" &
+    " ""data"": {" &
+    "  ""produtos"": [" &
+    "   {" &
+    "    ""EMPRESA"": ""01""," &
+    "    ""CFILANT"": ""01""," &
+    "    ""B1_COD"": """ & UCase(DadosArquivoCorrente.NomeArquivoSemExtensao) & """," &
+    "    ""B1_GRUPO"": """ & valGrupo & """," &
+    "    ""B1_DESC"": """ & tituloLimpo & """," &
+    "    ""B1_XREVM"": """ & Me.txtB1_XREVM.Text.Trim & """," &
+    "    ""B1_TIPO"": """ & valTipo & """," &
+    "    ""B1_UM"": """ & valUM & """," &
+    "    ""B1_LOCPAD"": ""03""," &
+    "    ""B1_POSIPI"": ""00000000""," &
+    "    ""B1_FINALID"": ""1""," &
+    "    ""B1_ORIGEM"": ""0""," &
+    "    ""B1_XCODDES"": """ & codDesenho & """," &
+    "    ""B1_PESO"": " & pesoFormatado & "," &
+    "    ""B1_PESBRU"": " & pesoFormatado & "" &
+    "   }" &
+    "  ]" &
+    " }" &
+    "}"
+
+
+                Using writer As New System.IO.StreamWriter(postRequest.GetRequestStream())
+                    writer.Write(jsonPayload)
+                End Using
+
+                ' Enviar e ler a resposta do Protheus
+                Using postResponse As System.Net.HttpWebResponse = CType(postRequest.GetResponse(), System.Net.HttpWebResponse)
+
+                    Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
+
+                        Dim responseResult As String = reader.ReadToEnd()
+
+                        System.Diagnostics.Debug.WriteLine("SINCO: Produto criado na API Protheus. Resposta: " & responseResult)
+
+                        ' Usa Expressão Regular para extrair o código B1_COD do JSON de resposta
+
+                        Dim matchCodigo As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(responseResult, """B1_COD""\s*:\s*""([^""]+)""")
+
+                        If matchCodigo.Success Then
+
+                            ' Retorna somente o número gerado (ex: MT3-5050)
+
+                            ' MsgBox(matchCodigo.Groups(1).Value)
+
+                            MsgBox("Atenção! Você deve renomear o arquivo: " & codDesenho & " para o novo codigo: " & matchCodigo.Groups(1).Value, vbCritical, "Atenção")
+
+                        Else
+
+                            ' Caso não encontre B1_COD, exibe a resposta completa caso a estrutura seja diferente
+
+                            MsgBox(responseResult)
+
+                        End If
+
+                    End Using
+
+                End Using
+
+            Else
+
+                System.Diagnostics.Debug.WriteLine("SINCO: Falha ao obter token de acesso na API Protheus.")
+
+            End If
+
+        Catch exAPI As Exception
+            ' Apenas loga o erro, para não travar o processo principal de salvamento (MySQL)
+            System.Diagnostics.Debug.WriteLine("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
+            MsgBox("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
+
+        End Try
+
+
+
+
+    End Sub
+
+    Private Sub Button8_Click(sender As Object, e As EventArgs) Handles Button8.Click
+
+        Try
+            ' 1. Aqui você pega os dados reais do seu Solid Edge (Documento Corrente)
+            ' Exemplo estático:
+            Dim arquivo As String = DadosArquivoCorrente.NomeArquivoSemExtensao ' "MTA-0350.PAR"
+            Dim titulo As String = DadosArquivoCorrente.Titulo ' "PORCA SEXT A6 INOX"
+            Dim grupo As String = Me.cboB1_GRUPO.Text  '"FIXADORES"
+            Dim unidade As String = Me.cboB1_UM.Text  '"PC"
+            Dim tipo As String = Me.cboB1_TIPO.Text ' "PECA"
+            Dim rev As String = Me.txtB1_XREVM.Text ' "01"
+            ' 2. Sanitizamos os textos para o formato de Link Web (transforma espaços em %20, etc)
+            arquivo = Uri.EscapeDataString(arquivo)
+            titulo = Uri.EscapeDataString(titulo)
+            grupo = Uri.EscapeDataString(grupo)
+            unidade = Uri.EscapeDataString(unidade)
+            tipo = Uri.EscapeDataString(tipo)
+            rev = Uri.EscapeDataString(rev)
+            ' 3. Montamos a URL completa enviando os parâmetros
+            Dim urlBase As String = "http://localhost:5174/engenharia/sinco/formulario"
+            Dim urlFinal As String = $"{urlBase}?arquivo={arquivo}&titulo={titulo}&grupo={grupo}&unidade={unidade}&tipo={tipo}&rev={rev}"
+            ' 4. Dispara o navegador padrão do Windows com a nova aba web!
+            System.Diagnostics.Process.Start(urlFinal)
+        Catch ex As Exception
+            MessageBox.Show("Erro ao tentar abrir a versão Web: " & ex.Message, "Erro Web", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
 
     End Sub
@@ -14937,33 +15266,33 @@ Module ModListarComponentesMontagem
                         'Continue For
                         'Else
                         Select Case extensao
-                                Case ".psm", ".par"
-                                    Try
-                                        Dim dxfDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".dxf")
+                            Case ".psm", ".par"
+                                Try
+                                    Dim dxfDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".dxf")
 
-                                        ' Chama a função passando O CAMINHO COMPLETO E CORRETO
-                                        ExportarDXFPlanificadoAuto(dxfDestino)
+                                    ' Chama a função passando O CAMINHO COMPLETO E CORRETO
+                                    ExportarDXFPlanificadoAuto(dxfDestino)
 
-                                        ' Aguarda até o arquivo existir
-                                        Dim tentativas As Integer = 0
-                                        Do Until File.Exists(dxfDestino) OrElse tentativas > 20
-                                            Threading.Thread.Sleep(250)
-                                            tentativas += 1
-                                        Loop
+                                    ' Aguarda até o arquivo existir
+                                    Dim tentativas As Integer = 0
+                                    Do Until File.Exists(dxfDestino) OrElse tentativas > 20
+                                        Threading.Thread.Sleep(250)
+                                        tentativas += 1
+                                    Loop
 
-                                        If File.Exists(dxfDestino) Then
-                                            row.Cells("dgvdxf").Value = My.Resources.dxf
-                                            exportadosDXF += 1
-                                        Else
-                                            row.Cells("dgvdxf").Value = My.Resources.sem_icone
-                                        End If
-                                    Catch
+                                    If File.Exists(dxfDestino) Then
+                                        row.Cells("dgvdxf").Value = My.Resources.dxf
+                                        exportadosDXF += 1
+                                    Else
                                         row.Cells("dgvdxf").Value = My.Resources.sem_icone
-                                    End Try
-                                Case Else
+                                    End If
+                                Catch
                                     row.Cells("dgvdxf").Value = My.Resources.sem_icone
-                            End Select
-                        End If
+                                End Try
+                            Case Else
+                                row.Cells("dgvdxf").Value = My.Resources.sem_icone
+                        End Select
+                    End If
                     ' End If
 
                     '──────────────────────────────────────────────
