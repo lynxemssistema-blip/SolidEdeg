@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/adm/Documents/SolidEdeg rev 4.0/Macros/**)",
+      "Bash(powershell.exe -Command \"Get-Process -Id 60056 | Select-Object StartTime, CommandLine\")",
+      "Bash(ipconfig /all)",
+      "Bash(powershell -Command \"Get-WmiObject Win32_Process -Filter ''ProcessId=27696'' | Select-Object ExecutablePath,WorkingDirectory\")",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

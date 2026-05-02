@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -Command '\\(Get-NetTCPConnection -LocalPort 3001 -State Listen\\).OwningProcess')",
+      "Bash(powershell -Command \"pm2 list\")",
+      "Bash(powershell -Command \"Get-Process -Id 27696 | Select-Object Id, Name, StartTime, CommandLine\")",
+      "Bash(powershell -Command \"Get-WmiObject Win32_Process -Filter ''ProcessId=27696'' | Select-Object CommandLine\")",
+      "Bash(node -e \":*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\adm\\Desktop\\MetalFisa Anty\\solidedge-agent"
+    ]
+  }
+}
