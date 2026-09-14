@@ -1,24 +1,24 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="My" GeneratedClassName="MySettings" UseMySettingsClassName="true">
   <Profiles />
   <Settings>
     <Setting Name="MySqlBancoDados" Type="System.String" Scope="User">
-      <Value Profile="(Default)">C:\Users\adm\Desktop\Estrutura padrão Lynx\005-ORDEM DE SERVIÇO</Value>
+      <Value Profile="(Default)">u494795077_Metalfisa</Value>
     </Setting>
     <Setting Name="MysqlEndereco" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">193.203.175.68</Value>
     </Setting>
     <Setting Name="MysqlUsuario" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">u494795077_Metalfisa</Value>
     </Setting>
     <Setting Name="MysqlSenha" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">10207597Rdv*</Value>
     </Setting>
     <Setting Name="BancoDadosAtivo" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">u494795077_Metalfisa</Value>
     </Setting>
     <Setting Name="TipoConexao" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">MYSQL</Value>
     </Setting>
     <Setting Name="EnderecoImagens" Type="System.String" Scope="User">
       <Value Profile="(Default)" />

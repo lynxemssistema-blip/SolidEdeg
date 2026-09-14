@@ -36,8 +36,19 @@ Public Class SolidEdgeReaderService
             For Each propSet As Object In propSets
                 For Each prop As Object In propSet
                     Try
+                        If prop Is Nothing Then Continue For
+
+                        Dim propName As String = ""
+                        Try
+                            propName = prop.Name
+                        Catch
+                            Continue For
+                        End Try
+
+                        If String.IsNullOrEmpty(propName) Then Continue For
+
                         ' Ignora propriedades cujo nome não nos interessa
-                        If Not propsInteressantes.Any(Function(p) prop.Name.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) Then Continue For
+                        If Not propsInteressantes.Any(Function(p) propName.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) Then Continue For
 
                         Dim valorRaw As Object = Nothing
                         Try
@@ -48,48 +59,48 @@ Public Class SolidEdgeReaderService
 
                         Dim valor As String = If(valorRaw IsNot Nothing, valorRaw.ToString(), "")
 
-                        ' Mapeamento de Propriedades
+                        ' Mapeamento de Propriedades usando a variável local propName para segurança e performance
                         Select Case True
                             ' Informações Gerais
-                            Case prop.Name.IndexOf("Título", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Title", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Título", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Title", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Titulo = valor
-                            Case prop.Name.IndexOf("Assunto", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Subject", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Assunto", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Subject", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.AssuntoSubiTitulo = valor
-                            Case prop.Name.IndexOf("Bloqueado", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Bloqueado", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Bloqueado = valor
-                            Case prop.Name.IndexOf("Coment", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Comments", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Coment", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Comments", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Comentarios = valor
-                            Case prop.Name.IndexOf("Palavras-chave", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Keywords", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Palavras-chave", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Keywords", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.PalavraChave = valor
-                            Case prop.Name.IndexOf("Autor", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Author", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Autor", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Author", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Author = valor
-                            Case prop.Name.IndexOf("Empresa", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Company", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Empresa", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Company", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.CodigoJuridicoMat = valor
-                            Case prop.Name.IndexOf("Categ", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Category", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Categ", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Category", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Verificado = valor
-                            Case prop.Name.IndexOf("Gerente", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Gerente", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Aprovado = valor
-                            Case String.Equals(prop.Name, "Material", StringComparison.OrdinalIgnoreCase)
+                            Case String.Equals(propName, "Material", StringComparison.OrdinalIgnoreCase)
                                 dadosArquivoCorrente.material = valor
-                            Case prop.Name.IndexOf("Tipo de Desenho", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Tipo de Desenho", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.TipoDesenho = valor
 
                             ' Datas
-                            Case String.Equals(prop.Name, "Data", StringComparison.OrdinalIgnoreCase)
+                            Case String.Equals(propName, "Data", StringComparison.OrdinalIgnoreCase)
                                 dadosArquivoCorrente.DataCriacaDesenho = FormatarDataSegura(valor)
-                            Case String.Equals(prop.Name, "DataR", StringComparison.OrdinalIgnoreCase)
+                            Case String.Equals(propName, "DataR", StringComparison.OrdinalIgnoreCase)
                                 dadosArquivoCorrente.DataUltimoSalvamento = FormatarDataSegura(valor)
 
                             ' Dimensões e Físicas
-                            Case prop.Name.IndexOf("CutSizeX", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("CutSizeX", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.ComprimentoBlank = LimparUnidades(valor)
-                            Case prop.Name.IndexOf("CutSizeY", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("CutSizeY", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.LarguraBlank = LimparUnidades(valor)
-                            Case prop.Name.IndexOf("Material Thickness", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Espessura do Material", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Material Thickness", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Espessura do Material", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Espessura = LimparUnidades(valor)
-                            Case prop.Name.IndexOf("Mass", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Mass", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.Massa = LimparUnidades(valor)
-                            Case prop.Name.IndexOf("Área_de_superfície", StringComparison.OrdinalIgnoreCase) >= 0 OrElse prop.Name.IndexOf("Area_de_superficie", StringComparison.OrdinalIgnoreCase) >= 0
+                            Case propName.IndexOf("Área_de_superfície", StringComparison.OrdinalIgnoreCase) >= 0 OrElse propName.IndexOf("Area_de_superficie", StringComparison.OrdinalIgnoreCase) >= 0
                                 dadosArquivoCorrente.AreaPintura = ConverterAreaParaMetrosQuadrados(valor)
 
                         End Select

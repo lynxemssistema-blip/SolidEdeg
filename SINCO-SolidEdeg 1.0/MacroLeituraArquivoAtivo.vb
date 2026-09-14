@@ -1,4 +1,4 @@
-﻿'Imports SolidEdgeFramework
+'Imports SolidEdgeFramework
 Imports System.Drawing
 Imports System.IO
 Imports System.Runtime.InteropServices
@@ -374,6 +374,9 @@ Module MacroLeituraArquivoAtivo
             ' 🔹 Exporta como PDF
             draftDoc.SaveAs(caminhoPDF)
 
+            ' 🔹 Envia para a API para associação e IA
+            SalvarAssocicaoPDFAPI(nomeBase, caminhoPDF)
+
             ' 🔹 Fecha o detalhamento (sem salvar alterações)
             draftDoc.Close(False)
 
@@ -507,6 +510,10 @@ Module MacroLeituraArquivoAtivo
             ' ============================================================
             If File.Exists(caminhoPDF) Then File.Delete(caminhoPDF)
             draftDoc.SaveAs(caminhoPDF)
+
+            ' 🔹 Envia para a API para associação e IA
+            SalvarAssocicaoPDFAPI(nomeBase, caminhoPDF)
+
             draftDoc.Close(False)
 
             ' ============================================================
@@ -606,6 +613,10 @@ Module MacroLeituraArquivoAtivo
 
                                 If File.Exists(caminhoPDF) Then File.Delete(caminhoPDF)
                                 draftDoc.SaveAs(caminhoPDF)
+
+                                ' 🔹 Envia para a API para associação e IA
+                                SalvarAssocicaoPDFAPI(nomeBase, caminhoPDF)
+
                                 draftDoc.Close(False)
                                 exportados += 1
                             End If
@@ -1577,6 +1588,107 @@ Module MacroLeituraArquivoAtivo
         End Try
     End Sub
 
+    Public Sub SalvarAssocicaoPDFAPI(nomeBase As String, caminhoPDF As String)
+        Try
+            ' 1. Verificar se o registro já existe no banco MySQL para evitar repetição
+            Dim urlDB As String = caminhoPDF.Replace("\", "\\")
+            Dim queryExist As String = $"SELECT id FROM produtos_docs WHERE produto_codigo = '{nomeBase}' AND url_arquivo = '{urlDB}'"
+            
+            Dim dt As System.Data.DataTable = Nothing
+            Try
+                cl_BancoDados.AbrirBanco()
+                dt = cl_BancoDados.CarregarDados(queryExist)
+                cl_BancoDados.FecharBanco()
+            Catch
+                ' Se falhar o banco direto, segue em frente pois o app já usa
+            End Try
+
+            If dt Is Nothing OrElse dt.Rows.Count = 0 Then
+                ' 2. Enviar via POST para a API Node.js (que extrai os metadados com IA)
+                Dim postUrl As String = "http://192.168.1.77:3001/api/docs"
+                Dim request As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+                request.Method = "POST"
+                request.ContentType = "application/json"
+                
+                Dim urlEscapada As String = caminhoPDF.Replace("\", "\\").Replace("""", "\""")
+                Dim titulo As String = nomeBase & ".pdf"
+                Dim postData As String = "{""produto_codigo"":""" & nomeBase & """,""titulo"":""" & titulo & """,""url_arquivo"":""" & urlEscapada & """,""tipo"":""Desenho""}"
+
+                Dim byteArray As Byte() = System.Text.Encoding.UTF8.GetBytes(postData)
+                request.ContentLength = byteArray.Length
+
+                Using dataStream As System.IO.Stream = request.GetRequestStream()
+                    dataStream.Write(byteArray, 0, byteArray.Length)
+                End Using
+
+                Using response As System.Net.HttpWebResponse = CType(request.GetResponse(), System.Net.HttpWebResponse)
+                    ' O Node.js se encarrega de ler e inserir
+                End Using
+            End If
+        Catch ex As Exception
+            System.Diagnostics.Debug.WriteLine("Erro ao associar PDF na API Node.js: " & ex.Message)
+        End Try
+    End Sub
+    ''' <summary>
+    ''' Exporta PDF diretamente de um arquivo .dft (detalhamento) usando o caminho explicito.
+    ''' Nao usa ActiveDocument - abre o .dft pelo caminho informado e fecha apos exportar.
+    ''' </summary>
+    ''' <param name="caminhoDFT">Caminho completo do arquivo .dft</param>
+    ''' <param name="caminhoPDFDestino">Caminho completo onde o PDF sera salvo</param>
+    Public Sub ExportarPDFDoDetalhamento(caminhoDFT As String, caminhoPDFDestino As String)
+        Try
+            If Not File.Exists(caminhoDFT) Then
+                Debug.WriteLine("Aviso ExportarPDFDoDetalhamento: arquivo nao encontrado: " & caminhoDFT)
+                Exit Sub
+            End If
+
+            Dim seApp As SolidEdgeFramework.Application =
+                CType(Marshal.GetActiveObject("SolidEdge.Application"), SolidEdgeFramework.Application)
+
+            If seApp Is Nothing Then Exit Sub
+
+            Try : seApp.DisplayAlerts = False : Catch : End Try
+
+            Dim draftDoc As SolidEdgeDraft.DraftDocument = Nothing
+            Try
+                draftDoc = CType(seApp.Documents.Open(caminhoDFT), SolidEdgeDraft.DraftDocument)
+
+                If draftDoc Is Nothing Then
+                    Debug.WriteLine("Aviso ExportarPDFDoDetalhamento: nao foi possivel abrir " & IO.Path.GetFileName(caminhoDFT))
+                    Exit Sub
+                End If
+
+                Try
+                    seApp.SetGlobalParameter(172, 1)
+                Catch
+                End Try
+
+                Try
+                    If File.Exists(caminhoPDFDestino) Then File.Delete(caminhoPDFDestino)
+                Catch
+                End Try
+
+                draftDoc.SaveAs(caminhoPDFDestino)
+                
+                ' 🔹 Envia para a API para associação e IA
+                Dim nomeProd As String = IO.Path.GetFileNameWithoutExtension(caminhoPDFDestino)
+                SalvarAssocicaoPDFAPI(nomeProd, caminhoPDFDestino)
+
+                Debug.WriteLine("PDF exportado: " & caminhoPDFDestino)
+
+            Finally
+                Try
+                    If draftDoc IsNot Nothing Then draftDoc.Close(False)
+                Catch
+                End Try
+                Try : seApp.DisplayAlerts = True : Catch : End Try
+            End Try
+
+        Catch ex As Exception
+            Debug.WriteLine("Erro ExportarPDFDoDetalhamento: " & ex.Message)
+            Throw
+        End Try
+    End Sub
 
 End Module
 

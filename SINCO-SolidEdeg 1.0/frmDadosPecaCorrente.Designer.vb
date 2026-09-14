@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()>
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()>
 Partial Class frmDadosPecaCorrente
     Inherits System.Windows.Forms.Form
 
@@ -34,7 +34,6 @@ Partial Class frmDadosPecaCorrente
         Me.MarcarComoNovoRevisaoToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.chkdxf = New System.Windows.Forms.CheckBox()
         Me.chkPdf = New System.Windows.Forms.CheckBox()
-        Me.btnLimpar = New System.Windows.Forms.Button()
         Me.btnSalvarCadProtheus = New System.Windows.Forms.Button()
         Me.txtB1_XREVM = New System.Windows.Forms.TextBox()
         Me.Label50 = New System.Windows.Forms.Label()
@@ -62,11 +61,9 @@ Partial Class frmDadosPecaCorrente
         Me.Label1 = New System.Windows.Forms.Label()
         Me.btnAbriDetalhamentoCorrente = New System.Windows.Forms.Button()
         Me.btnGerarPdf = New System.Windows.Forms.Button()
-        Me.btnDxf = New System.Windows.Forms.Button()
         Me.chkiges = New System.Windows.Forms.CheckBox()
         Me.lblResumo = New System.Windows.Forms.Label()
         Me.chkOpcaodePasta = New System.Windows.Forms.CheckBox()
-        Me.BtnGeraArquivos = New System.Windows.Forms.Button()
         Me.mnudgvDesenhoCliente = New System.Windows.Forms.ContextMenuStrip(Me.components)
         Me.BuscarDesenhoDeReferenciaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.BuscarArquivoPDFDeReferenciaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
@@ -123,6 +120,7 @@ Partial Class frmDadosPecaCorrente
         Me.DataGridViewImageColumn1 = New System.Windows.Forms.DataGridViewImageColumn()
         Me.DataGridViewImageColumn2 = New System.Windows.Forms.DataGridViewImageColumn()
         Me.ProgressBar1 = New System.Windows.Forms.ProgressBar()
+        Me.btnLote = New System.Windows.Forms.Button()
         Me.mnudgvDadosPecas.SuspendLayout()
         Me.mnudgvDesenhoCliente.SuspendLayout()
         Me.mnudgvMateriaisProtheus.SuspendLayout()
@@ -133,10 +131,10 @@ Partial Class frmDadosPecaCorrente
         '
         'btnListaConjunto
         '
-        Me.btnListaConjunto.Location = New System.Drawing.Point(591, 11)
+        Me.btnListaConjunto.Location = New System.Drawing.Point(318, 11)
         Me.btnListaConjunto.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnListaConjunto.Name = "btnListaConjunto"
-        Me.btnListaConjunto.Size = New System.Drawing.Size(123, 50)
+        Me.btnListaConjunto.Size = New System.Drawing.Size(154, 50)
         Me.btnListaConjunto.TabIndex = 5
         Me.btnListaConjunto.Text = "BOM"
         Me.ToolTipAjuda.SetToolTip(Me.btnListaConjunto, resources.GetString("btnListaConjunto.ToolTip"))
@@ -189,7 +187,7 @@ Partial Class frmDadosPecaCorrente
         'chkdxf
         '
         Me.chkdxf.AutoSize = True
-        Me.chkdxf.Location = New System.Drawing.Point(718, 116)
+        Me.chkdxf.Location = New System.Drawing.Point(776, 121)
         Me.chkdxf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.chkdxf.Name = "chkdxf"
         Me.chkdxf.Size = New System.Drawing.Size(112, 20)
@@ -200,7 +198,7 @@ Partial Class frmDadosPecaCorrente
         'chkPdf
         '
         Me.chkPdf.AutoSize = True
-        Me.chkPdf.Location = New System.Drawing.Point(852, 116)
+        Me.chkPdf.Location = New System.Drawing.Point(910, 121)
         Me.chkPdf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.chkPdf.Name = "chkPdf"
         Me.chkPdf.Size = New System.Drawing.Size(117, 20)
@@ -208,26 +206,15 @@ Partial Class frmDadosPecaCorrente
         Me.chkPdf.Text = "Converter PDF"
         Me.chkPdf.UseVisualStyleBackColor = True
         '
-        'btnLimpar
-        '
-        Me.btnLimpar.Location = New System.Drawing.Point(736, 11)
-        Me.btnLimpar.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
-        Me.btnLimpar.Name = "btnLimpar"
-        Me.btnLimpar.Size = New System.Drawing.Size(123, 50)
-        Me.btnLimpar.TabIndex = 11
-        Me.btnLimpar.Text = "Limpar Grid"
-        Me.ToolTipAjuda.SetToolTip(Me.btnLimpar, "🧹 Limpa o grid para realizar uma nova leitura ou atualizar os dados exibidos.")
-        Me.btnLimpar.UseVisualStyleBackColor = True
-        '
         'btnSalvarCadProtheus
         '
         Me.btnSalvarCadProtheus.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.salvar
         Me.btnSalvarCadProtheus.Location = New System.Drawing.Point(11, 11)
         Me.btnSalvarCadProtheus.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnSalvarCadProtheus.Name = "btnSalvarCadProtheus"
-        Me.btnSalvarCadProtheus.Size = New System.Drawing.Size(123, 50)
+        Me.btnSalvarCadProtheus.Size = New System.Drawing.Size(139, 50)
         Me.btnSalvarCadProtheus.TabIndex = 96
-        Me.btnSalvarCadProtheus.Text = "SINCO"
+        Me.btnSalvarCadProtheus.Text = "Salvar"
         Me.btnSalvarCadProtheus.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.btnSalvarCadProtheus.UseVisualStyleBackColor = True
         '
@@ -411,7 +398,7 @@ Partial Class frmDadosPecaCorrente
         Me.txtendereco.Location = New System.Drawing.Point(527, 165)
         Me.txtendereco.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.txtendereco.Name = "txtendereco"
-        Me.txtendereco.Size = New System.Drawing.Size(578, 22)
+        Me.txtendereco.Size = New System.Drawing.Size(630, 22)
         Me.txtendereco.TabIndex = 19
         '
         'Label8
@@ -468,9 +455,9 @@ Partial Class frmDadosPecaCorrente
         Me.btnAbriDetalhamentoCorrente.Location = New System.Drawing.Point(156, 11)
         Me.btnAbriDetalhamentoCorrente.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnAbriDetalhamentoCorrente.Name = "btnAbriDetalhamentoCorrente"
-        Me.btnAbriDetalhamentoCorrente.Size = New System.Drawing.Size(123, 50)
+        Me.btnAbriDetalhamentoCorrente.Size = New System.Drawing.Size(156, 50)
         Me.btnAbriDetalhamentoCorrente.TabIndex = 12
-        Me.btnAbriDetalhamentoCorrente.Text = "Abrir DFT"
+        Me.btnAbriDetalhamentoCorrente.Text = "Detalhamento"
         Me.btnAbriDetalhamentoCorrente.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipAjuda.SetToolTip(Me.btnAbriDetalhamentoCorrente, "📄 Caso haja detalhamento para a peça atual, o desenho será aberto automaticament" &
         "e.")
@@ -478,36 +465,20 @@ Partial Class frmDadosPecaCorrente
         '
         'btnGerarPdf
         '
-        Me.btnGerarPdf.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.pdf
-        Me.btnGerarPdf.Location = New System.Drawing.Point(301, 11)
+        Me.btnGerarPdf.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.alterar
+        Me.btnGerarPdf.Location = New System.Drawing.Point(626, 88)
         Me.btnGerarPdf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.btnGerarPdf.Name = "btnGerarPdf"
         Me.btnGerarPdf.Size = New System.Drawing.Size(123, 50)
         Me.btnGerarPdf.TabIndex = 3
-        Me.btnGerarPdf.Text = "Gerar PDF"
+        Me.btnGerarPdf.Text = "Processar"
         Me.btnGerarPdf.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
-        Me.ToolTipAjuda.SetToolTip(Me.btnGerarPdf, "🧾 Clique aqui para gerar o PDF do desenho atual." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "⚠️ O PDF só será gerado se o d" &
-        "etalhamento existir." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "        ")
         Me.btnGerarPdf.UseVisualStyleBackColor = True
-        '
-        'btnDxf
-        '
-        Me.btnDxf.Image = Global.SINCO_SolidEdeg_1._0.My.Resources.Resources.dxf
-        Me.btnDxf.Location = New System.Drawing.Point(446, 11)
-        Me.btnDxf.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
-        Me.btnDxf.Name = "btnDxf"
-        Me.btnDxf.Size = New System.Drawing.Size(123, 50)
-        Me.btnDxf.TabIndex = 0
-        Me.btnDxf.Text = "Gerar dxf"
-        Me.btnDxf.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
-        Me.ToolTipAjuda.SetToolTip(Me.btnDxf, "🧾 Clique aqui para gerar o DXF do desenho atual." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "⚠️ O DXF só será gerado se o d" &
-        "etalhamento existir.")
-        Me.btnDxf.UseVisualStyleBackColor = True
         '
         'chkiges
         '
         Me.chkiges.AutoSize = True
-        Me.chkiges.Location = New System.Drawing.Point(984, 116)
+        Me.chkiges.Location = New System.Drawing.Point(1042, 121)
         Me.chkiges.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.chkiges.Name = "chkiges"
         Me.chkiges.Size = New System.Drawing.Size(121, 20)
@@ -519,7 +490,7 @@ Partial Class frmDadosPecaCorrente
         '
         Me.lblResumo.AutoSize = True
         Me.lblResumo.Font = New System.Drawing.Font("Microsoft Sans Serif", 10.2!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.lblResumo.Location = New System.Drawing.Point(1027, 81)
+        Me.lblResumo.Location = New System.Drawing.Point(1085, 86)
         Me.lblResumo.Name = "lblResumo"
         Me.lblResumo.Size = New System.Drawing.Size(44, 20)
         Me.lblResumo.TabIndex = 23
@@ -529,28 +500,15 @@ Partial Class frmDadosPecaCorrente
         'chkOpcaodePasta
         '
         Me.chkOpcaodePasta.AutoSize = True
-        Me.chkOpcaodePasta.Location = New System.Drawing.Point(718, 83)
+        Me.chkOpcaodePasta.Checked = True
+        Me.chkOpcaodePasta.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.chkOpcaodePasta.Location = New System.Drawing.Point(776, 88)
         Me.chkOpcaodePasta.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.chkOpcaodePasta.Name = "chkOpcaodePasta"
         Me.chkOpcaodePasta.Size = New System.Drawing.Size(243, 20)
         Me.chkOpcaodePasta.TabIndex = 22
         Me.chkOpcaodePasta.Text = "Salvar na Pasta corrente do arquivo"
-        Me.ToolTipAjuda.SetToolTip(Me.chkOpcaodePasta, "1 - Opção desmarcada: permite que o usuário escolha, separadamente, a pasta onde " &
-        "serão salvos os arquivos DXF e PDF." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "2 - Opção marcada: salva cada arquivo na su" &
-        "a pasta de origem.")
         Me.chkOpcaodePasta.UseVisualStyleBackColor = True
-        '
-        'BtnGeraArquivos
-        '
-        Me.BtnGeraArquivos.Location = New System.Drawing.Point(881, 11)
-        Me.BtnGeraArquivos.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
-        Me.BtnGeraArquivos.Name = "BtnGeraArquivos"
-        Me.BtnGeraArquivos.Size = New System.Drawing.Size(123, 50)
-        Me.BtnGeraArquivos.TabIndex = 9
-        Me.BtnGeraArquivos.Text = "Gerar"
-        Me.ToolTipAjuda.SetToolTip(Me.BtnGeraArquivos, "📄 Selecione uma das opções laterais (PDF ou DXF) para que o SINCO gere o arquivo" &
-        " " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "automaticamente, seguindo as regras principais do sistema.")
-        Me.BtnGeraArquivos.UseVisualStyleBackColor = True
         '
         'mnudgvDesenhoCliente
         '
@@ -868,14 +826,26 @@ Partial Class frmDadosPecaCorrente
         '
         Me.ProgressBar1.Location = New System.Drawing.Point(8, 259)
         Me.ProgressBar1.Name = "ProgressBar1"
-        Me.ProgressBar1.Size = New System.Drawing.Size(1204, 23)
+        Me.ProgressBar1.Size = New System.Drawing.Size(1109, 23)
         Me.ProgressBar1.TabIndex = 97
+        '
+        'btnLote
+        '
+        Me.btnLote.Location = New System.Drawing.Point(478, 11)
+        Me.btnLote.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
+        Me.btnLote.Name = "btnLote"
+        Me.btnLote.Size = New System.Drawing.Size(154, 50)
+        Me.btnLote.TabIndex = 104
+        Me.btnLote.Text = "Lote/Pasta"
+        Me.ToolTipAjuda.SetToolTip(Me.btnLote, resources.GetString("btnLote.ToolTip"))
+        Me.btnLote.UseVisualStyleBackColor = True
         '
         'frmDadosPecaCorrente
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 16.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1120, 294)
+        Me.ClientSize = New System.Drawing.Size(1172, 294)
+        Me.Controls.Add(Me.btnLote)
         Me.Controls.Add(Me.ProgressBar1)
         Me.Controls.Add(Me.chkiges)
         Me.Controls.Add(Me.txtB1_XREVM)
@@ -885,9 +855,7 @@ Partial Class frmDadosPecaCorrente
         Me.Controls.Add(Me.btnSalvarCadProtheus)
         Me.Controls.Add(Me.cboB1_GRUPO)
         Me.Controls.Add(Me.btnListaConjunto)
-        Me.Controls.Add(Me.BtnGeraArquivos)
         Me.Controls.Add(Me.cboB1_TIPO)
-        Me.Controls.Add(Me.btnLimpar)
         Me.Controls.Add(Me.Label49)
         Me.Controls.Add(Me.chkPdf)
         Me.Controls.Add(Me.Label22)
@@ -898,7 +866,6 @@ Partial Class frmDadosPecaCorrente
         Me.Controls.Add(Me.Label47)
         Me.Controls.Add(Me.txtEspessura)
         Me.Controls.Add(Me.txtAreametroquadr)
-        Me.Controls.Add(Me.btnDxf)
         Me.Controls.Add(Me.Label18)
         Me.Controls.Add(Me.txtCutSizey)
         Me.Controls.Add(Me.btnGerarPdf)
@@ -916,7 +883,6 @@ Partial Class frmDadosPecaCorrente
         Me.Margin = New System.Windows.Forms.Padding(3, 2, 3, 2)
         Me.Name = "frmDadosPecaCorrente"
         Me.Text = "SINCO - Solid Edge - Lynx"
-        Me.TopMost = True
         Me.mnudgvDadosPecas.ResumeLayout(False)
         Me.mnudgvDesenhoCliente.ResumeLayout(False)
         Me.mnudgvMateriaisProtheus.ResumeLayout(False)
@@ -927,17 +893,13 @@ Partial Class frmDadosPecaCorrente
         Me.PerformLayout()
 
     End Sub
-
-    Friend WithEvents btnDxf As Windows.Forms.Button
     Friend WithEvents btnGerarPdf As Windows.Forms.Button
     Friend WithEvents btnListaConjunto As Windows.Forms.Button
     Friend WithEvents chkdxf As Windows.Forms.CheckBox
     Friend WithEvents chkPdf As Windows.Forms.CheckBox
-    Friend WithEvents BtnGeraArquivos As Windows.Forms.Button
     Friend WithEvents DataGridViewImageColumn1 As Windows.Forms.DataGridViewImageColumn
     Friend WithEvents mnudgvDadosPecas As Windows.Forms.ContextMenuStrip
     Friend WithEvents AbrirArquivoToolStripMenuItem As Windows.Forms.ToolStripMenuItem
-    Friend WithEvents btnLimpar As Windows.Forms.Button
     Friend WithEvents AbrirDetalhamentoToolStripMenuItem As Windows.Forms.ToolStripMenuItem
     Friend WithEvents DataGridViewImageColumn2 As Windows.Forms.DataGridViewImageColumn
     Friend WithEvents ToolStripSeparator2 As Windows.Forms.ToolStripSeparator
@@ -1027,4 +989,5 @@ Partial Class frmDadosPecaCorrente
     Friend WithEvents Label50 As Windows.Forms.Label
     Friend WithEvents btnSalvarCadProtheus As Windows.Forms.Button
     Friend WithEvents ProgressBar1 As Windows.Forms.ProgressBar
+    Friend WithEvents btnLote As Windows.Forms.Button
 End Class

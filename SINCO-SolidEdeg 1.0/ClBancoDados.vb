@@ -1,4 +1,4 @@
-﻿
+
 Imports System.Data.OleDb
 Imports System.Drawing
 Imports System.Globalization
@@ -10,8 +10,6 @@ Imports MySql.Data.MySqlClient
 Imports Org.BouncyCastle.Asn1.Cms
 
 Imports SolidEdgeFramework
-
-
 
 Public Class ClBancoDados
 
@@ -25,22 +23,22 @@ Public Class ClBancoDados
         End If
 
         Try
-            If My.Settings.TipoConexao = "MYSQL" Then
-                If My.Settings.MySqlBancoDados = "xx" Then
-                    BuscarArquivoconf()
-                Else
-                    conexao = "Server=" & My.Settings.MysqlEndereco & ";database=" & My.Settings.MySqlBancoDados & ";uid=" & My.Settings.MysqlUsuario & ";pwd=" & My.Settings.MysqlSenha & ";
-                        Max Pool Size=50;Connection Timeout=600;Connection Lifetime=3600;CharSet=utf8;"
-                End If
-            End If
+            ' 🔹 Dados fixos do banco de dados remoto de produção
+            Dim server As String = "193.203.175.68"
+            Dim database As String = "u494795077_Metalfisa"
+            Dim user As String = "u494795077_Metalfisa"
+            Dim pass As String = "10207597Rdv*"
+
+            conexao = "Server=" & server & ";database=" & database & ";uid=" & user & ";pwd=" & pass & ";Max Pool Size=50;Connection Timeout=600;Connection Lifetime=3600;CharSet=utf8;"
 
             ' Se o objeto for nulo ou a string de conexão mudou, cria um novo
             If myconect Is Nothing Then
                 myconect = New MySqlConnection(conexao)
-            ElseIf myconect.ConnectionString <> conexao Then
-                ' Se estiver aberta com outra string, fecha antes de trocar
-                If myconect.State = ConnectionState.Open Then myconect.Close()
-                myconect = New MySqlConnection(conexao)
+            Else
+                If myconect.State = ConnectionState.Broken OrElse myconect.ConnectionString <> conexao Then
+                    If myconect.State <> ConnectionState.Closed Then myconect.Close()
+                    myconect.ConnectionString = conexao
+                End If
             End If
 
             If myconect.State <> ConnectionState.Open Then
@@ -50,8 +48,7 @@ Public Class ClBancoDados
             Return True
         Catch ex As Exception
             ' Em caso de erro, decrementa o contador pois a tentativa falhou
-            OpenConnectionsCount -= 1
-            BuscarArquivoconf()
+            OpenConnectionsCount = Math.Max(0, OpenConnectionsCount - 1)
             Return False
         End Try
     End Function

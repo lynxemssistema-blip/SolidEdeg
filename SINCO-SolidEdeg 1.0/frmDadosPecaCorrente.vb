@@ -43,11 +43,7 @@ Public Class frmDadosPecaCorrente
 
 #Region "🔧 VARIÁVEIS GLOBAIS"
 
-    Private WithEvents timerAtualizacao As New System.Windows.Forms.Timer()
-
-
-
-    ' Controle de edição pendente
+    Private WithEvents timerAtualizacao As New System.Windows.Forms.Timer()    ' Controle de ediçao pendente
     Private editando As Boolean = False
     Private nomePropriedadeEditando As String = ""
     Private valorEditado As String = ""
@@ -65,32 +61,54 @@ Public Class frmDadosPecaCorrente
     Private dragIndex As Integer
     Private dragRow As DataGridViewRow
     Private dropIndex As Integer
+    Private dgvBOM As System.Windows.Forms.DataGridView = Nothing
+    Private executandoLote As Boolean = False
 
 
 
 #End Region
 
 
-    Private Sub btnDxf_Click(sender As Object, e As EventArgs) Handles btnDxf.Click
+    'Private Sub btnDxf_Click(sender As Object, e As EventArgs) Handles btnDxf.Click
+    '    Try
+    '        If app Is Nothing OrElse app.Documents.Count = 0 Then Exit Sub
+    '        Dim doc As Object = app.ActiveDocument
+    '        If doc Is Nothing Then Exit Sub
 
+    '        Dim caminho As String = doc.FullName
+    '        Dim ext As String = IO.Path.GetExtension(caminho).ToLower()
 
-        '  DxfArquivoCorrente()
-
-        'ExportarPlanificacaoDXF_Final()
-
-        '  ExportarDXFPlanificadoAuto()
-
-        ExportarDXFPlanificadoAuto(0)
-
-
-
-    End Sub
+    '        If ext = ".asm" Then
+    '            Dim resp As DialogResult = MessageBox.Show(
+    '                "O arquivo ativo é um Conjunto (.ASM). Deseja exportar a estrutura (BOM) em lote conforme as seleções de DXF/PDF?",
+    '                "SINCO - Exportação em Lote",
+    '                MessageBoxButtons.YesNo,
+    '                MessageBoxIcon.Question
+    '            )
+    '            If resp = DialogResult.Yes Then
+    '                ProcessarExportacaoBOM(dxfForcado:=True, pdfForcado:=False)
+    '            End If
+    '        Else
+    '            ExportarDXFPlanificadoAuto(0)
+    '        End If
+    '    Catch ex As Exception
+    '        MessageBox.Show("Erro ao gerar DXF: " & ex.Message, "Erro DXF", MessageBoxButtons.OK, MessageBoxIcon.Error)
+    '    End Try
+    'End Sub
 
     Private Sub frmDadosPecaCorrente_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
+        ' 🔹 Inicializa campos limpos e botões desativados
+        LimaprCampos()
+        SetBotoesAtivos(False)
+
         Try
             If app Is Nothing Then
-                app = Marshal.GetActiveObject("SolidEdge.Application")
+                Try
+                    app = Marshal.GetActiveObject("SolidEdge.Application")
+                Catch
+                    app = Nothing
+                End Try
             End If
 
             ' Inicia a verificação a cada 1 segundo (1000 ms)
@@ -98,10 +116,6 @@ Public Class frmDadosPecaCorrente
             timerAtualizacao.Start()
         Catch ex As Exception
         End Try
-
-
-
-        ' ListarTodasPropriedadesDoArquivo(TextBox1)
 
         Try
             Dim connString As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
@@ -158,8 +172,6 @@ Public Class frmDadosPecaCorrente
                 Dim codTipo As String = If(row("Código_Tipo") IsNot DBNull.Value, row("Código_Tipo").ToString().Trim(), "")
                 Dim descTipo As String = ""
                 If dtTipo.Columns.Contains("Descrição") Then descTipo = If(row("Descrição") IsNot DBNull.Value, row("Descrição").ToString().Trim(), "")
-
-                ' Exibe "Codigo - Descrição" se a descrição for encontrada, caso contrário mostra só o código
                 row("DescricaoExibicao") = codTipo
             Next
             With cboB1_TIPO
@@ -175,8 +187,6 @@ Public Class frmDadosPecaCorrente
                 Dim codUM As String = If(row("Codigo_UM") IsNot DBNull.Value, row("Codigo_UM").ToString().Trim(), "")
                 Dim descUM As String = ""
                 If dtUM.Columns.Contains("Descrição") Then descUM = If(row("Descrição") IsNot DBNull.Value, row("Descrição").ToString().Trim(), "")
-
-                ' Exibe "Codigo - Descrição" se a descrição for encontrada, caso contrário mostra só o código
                 row("DescricaoExibicao") = codUM
             Next
             With cboB1_UM
@@ -186,30 +196,27 @@ Public Class frmDadosPecaCorrente
                 .SelectedIndex = -1
             End With
 
-
-
-            CarregarPropriedadesArquivoCorrente()
-
+            ' Se já houver documento aberto no Solid Edge ao inicializar, carrega-o
+            If app IsNot Nothing Then
+                Try
+                    If app.Documents.Count > 0 AndAlso app.ActiveDocument IsNot Nothing Then
+                        CarregarPropriedadesArquivoCorrente()
+                    End If
+                Catch
+                End Try
+            End If
 
         Catch ex As Exception
             MsgBox("Erro ao carregar listas do Protheus (Grupo, Tipo, UM):" & Environment.NewLine & ex.Message, MsgBoxStyle.Critical, "Erro")
         End Try
 
         Try
-            ' Tenta garantir que o objeto global "app" esteja carregado
-            If app Is Nothing Then
-                app = Marshal.GetActiveObject("SolidEdge.Application")
+            If app IsNot Nothing Then
+                seAppEvents = CType(app.ApplicationEvents, SolidEdgeFramework.ISEApplicationEvents_Event)
             End If
-
-            ' Conecta sua variável à classe nativa de eventos da aplicação
-            seAppEvents = CType(app.ApplicationEvents, SolidEdgeFramework.ISEApplicationEvents_Event)
         Catch ex As Exception
-            ' Um aviso simples caso dê falha ao ativar o monitoramento
             Debug.WriteLine("Não foi possível acoplar aos Eventos do Solid Edge: " & ex.Message)
         End Try
-
-
-
 
     End Sub
 
@@ -217,8 +224,18 @@ Public Class frmDadosPecaCorrente
     ''' Tela de Carregamento com Progresso Matemático 
     ''' </summary>
     Private Sub ProcessarMudancaDeDocumento()
+        If executandoLote Then Exit Sub
         Try
             timerAtualizacao.Stop()
+
+            ' Impede loops sincronizando o nome do documento ativo logo na entrada
+            Try
+                If app IsNot Nothing AndAlso app.Documents.Count > 0 Then
+                    ultimoDocumentoAnalisado = app.ActiveDocument.FullName
+                End If
+            Catch
+            End Try
+
             Me.Cursor = Cursors.WaitCursor
 
             ' 1. CONFIGURA O PROGRESSO INICIAL: Começa em 30% visualmente
@@ -326,16 +343,18 @@ Public Class frmDadosPecaCorrente
     ''' </summary>
     Private Sub seAppEvents_AfterActiveDocumentChange(ByVal theDocument As Object) Handles seAppEvents.AfterActiveDocumentChange
         Try
-            ' Porque o evento vem de "fora" (do processo do Solid Edge), precisamos 
-            ' pedir permissão e atualizar os controles de forma segura na thread do formulário (Invoke)
+            ' GUARD: Se está em lote (BOM/exportação), ignorar completamente.
+            ' Sem este guard, Me.Invoke enfileira ProcessarMudancaDeDocumento na fila
+            ' de mensagens, e ele seria executado DEPOIS que executandoLote = False,
+            ' causando o encolhimento do formulário e destruição do grid.
+            If executandoLote Then Exit Sub
+
             If Me.InvokeRequired Then
-                ' Método clássico e compatível com 100% das versões do VB.NET
                 Me.Invoke(New MethodInvoker(AddressOf ProcessarMudancaDeDocumento))
             Else
                 ProcessarMudancaDeDocumento()
             End If
         Catch ex As Exception
-            ' Falhas silenciosas para não interromper navegação do usuário no ambiente 3D
             Debug.WriteLine("Erro AfterActiveDocumentChange: " & ex.Message)
         End Try
     End Sub
@@ -343,39 +362,64 @@ Public Class frmDadosPecaCorrente
 
 
     ''' <summary>
-    ''' Monitora em segundo plano se o usuário trocou a aba ativa do Solid Edge
+    ''' Monitora em segundo plano se o usuário trocou a aba ativa do Solid Edge ou fechou documentos
     ''' </summary>
     Private Sub timerAtualizacao_Tick(sender As Object, e As EventArgs) Handles timerAtualizacao.Tick
+        If executandoLote Then Exit Sub
+
         Try
             ' 1. Garante que a aplicação ainda está conectada
             If app Is Nothing Then
-                app = Marshal.GetActiveObject("SolidEdge.Application")
+                Try
+                    app = Marshal.GetActiveObject("SolidEdge.Application")
+                Catch
+                    app = Nothing
+                End Try
             End If
 
-            ' 2. Verifica se existe pelo menos 1 documento aberto
-            If app.Documents.Count > 0 Then
+            ' 2. Verifica se o Solid Edge está ativo e se possui documentos abertos
+            Dim qtdDocs As Integer = 0
+            If app IsNot Nothing Then
+                Try
+                    qtdDocs = app.Documents.Count
+                Catch
+                    ' Caso o Solid Edge tenha sido fechado pelo usuário
+                    app = Nothing
+                    qtdDocs = 0
+                End Try
+            End If
+
+            If qtdDocs > 0 Then
                 Dim caminhoAtual As String = ""
 
                 Try
-                    ' Pega o endereço completo do arquivo que está na tela do Solid Edge agora
-                    caminhoAtual = app.ActiveDocument.FullName
+                    If app.ActiveDocument IsNot Nothing Then
+                        caminhoAtual = app.ActiveDocument.FullName
+                    End If
                 Catch ex As Exception
-                    ' Silencioso: pode falhar uma fração de segundo se o arquivo estiver salvando
+                    ' Silencioso: pode falhar durante salvamento ou transição
                 End Try
 
                 ' 3. Se o arquivo na tela for DIFERENTE do último arquivo analisado, atualiza
-                If caminhoAtual <> "" AndAlso caminhoAtual <> ultimoDocumentoAnalisado Then
-
-                    ' Salva o novo documento como sendo o atual
-                    ultimoDocumentoAnalisado = caminhoAtual
-
-                    ' Atualiza a Interface
-                    ProcessarMudancaDeDocumento()
-
+                If Not String.IsNullOrEmpty(caminhoAtual) Then
+                    If caminhoAtual <> ultimoDocumentoAnalisado Then
+                        ultimoDocumentoAnalisado = caminhoAtual
+                        ProcessarMudancaDeDocumento()
+                    End If
+                Else
+                    If ultimoDocumentoAnalisado <> "" Then
+                        ultimoDocumentoAnalisado = ""
+                        LimaprCampos()
+                        SetBotoesAtivos(False)
+                    End If
                 End If
             Else
-                ' Se fechou tudo, pode limpar a tela
-                ultimoDocumentoAnalisado = ""
+                ' Nenhum documento aberto ou Solid Edge fechado
+                If ultimoDocumentoAnalisado <> "" OrElse btnSalvarCadProtheus.Enabled Then
+                    ultimoDocumentoAnalisado = ""
+                    LimaprCampos()
+                    SetBotoesAtivos(False)
+                End If
             End If
 
         Catch ex As Exception
@@ -398,11 +442,50 @@ Public Class frmDadosPecaCorrente
     End Sub
 
     Private Sub btnGerarPdf_Click(sender As Object, e As EventArgs) Handles btnGerarPdf.Click
-        '  ExportarPDFDetalhamento()
-        ExportarPDFDetalhamentoLote(0)
+        Try
+            If app Is Nothing OrElse app.Documents.Count = 0 Then Exit Sub
+            Dim doc As Object = app.ActiveDocument
+            If doc Is Nothing Then Exit Sub
 
+            Dim caminho As String = doc.FullName
+            Dim ext As String = IO.Path.GetExtension(caminho).ToLower()
+
+            If ext = ".asm" Then
+                Dim resp As DialogResult = MessageBox.Show(
+                    "O arquivo ativo é um Conjunto (.ASM). Deseja exportar a estrutura (BOM) em lote conforme as seleções de DXF/PDF?",
+                    "SINCO - Exportação em Lote",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                )
+                If resp = DialogResult.Yes Then
+                    ProcessarExportacaoBOM(dxfForcado:=False, pdfForcado:=True)
+                End If
+            Else
+                ExportarPDFDetalhamentoLote(0)
+            End If
+        Catch ex As Exception
+            MessageBox.Show("Erro ao gerar PDF: " & ex.Message, "Erro PDF", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
+
+    ''' <summary>
+    ''' Ativa ou desativa os botões principais de ação do formulário
+    ''' </summary>
+    Public Sub SetBotoesAtivos(ByVal ativo As Boolean)
+        Try
+            btnSalvarCadProtheus.Enabled = ativo
+            btnGerarPdf.Enabled = ativo
+            btnAbriDetalhamentoCorrente.Enabled = ativo
+            btnListaConjunto.Enabled = ativo
+            btnLote.Enabled = ativo
+            chkdxf.Enabled = ativo
+            chkPdf.Enabled = ativo
+            chkiges.Enabled = ativo
+            chkOpcaodePasta.Enabled = ativo
+        Catch ex As Exception
+        End Try
+    End Sub
 
     Public Sub CarregarPropriedadesArquivoCorrente()
 
@@ -411,24 +494,44 @@ Public Class frmDadosPecaCorrente
 
         Try
 
-            If app Is Nothing OrElse app.Documents.Count = 0 Then Exit Sub
+            If app Is Nothing OrElse app.Documents.Count = 0 Then
+                LimaprCampos()
+                SetBotoesAtivos(False)
+                Exit Sub
+            End If
 
-            Dim doc As Object = app.ActiveDocument
-            If doc Is Nothing Then Exit Sub
+            Dim doc As Object = Nothing
+            Try
+                doc = app.ActiveDocument
+            Catch
+                doc = Nothing
+            End Try
+
+            If doc Is Nothing Then
+                LimaprCampos()
+                SetBotoesAtivos(False)
+                Exit Sub
+            End If
 
             Dim caminho As String = doc.FullName
             Dim ext As String = IO.Path.GetExtension(caminho).ToLower()
-            If Not (ext = ".par" Or ext = ".psm" Or ext = ".asm") Then Exit Sub
+            If Not (ext = ".par" Or ext = ".psm" Or ext = ".asm") Then
+                LimaprCampos()
+                SetBotoesAtivos(False)
+                Exit Sub
+            End If
+
+            If ext = ".par" OrElse ext = ".psm" Then
+                ' ⚠️ Só recolhe o formulário se:
+                '    1) Não está em lote de exportação E
+                '    2) O grid da BOM não está visível atualmente
+                Dim gridBomAtivo As Boolean = (dgvBOM IsNot Nothing AndAlso dgvBOM.Visible AndAlso dgvBOM.Parent IsNot Nothing)
+                If Not executandoLote AndAlso Not gridBomAtivo Then
+                    Me.ClientSize = New System.Drawing.Size(1120, 294)
+                End If
+            End If
 
             Dim NomeArquivo As String = IO.Path.GetFileNameWithoutExtension(caminho).ToUpper()
-
-
-
-
-            ' 🚀 Suspende repintura
-            ' Me.SuspendLayout()
-            'dgvPropriedades.SuspendLayout()
-            '  bloqueiaEventosUI = True
 
             txtNumeroDesenho.Text = NomeArquivo & ext
             txtendereco.Text = caminho
@@ -444,9 +547,6 @@ Public Class frmDadosPecaCorrente
             txtEspessura.Text = DadosArquivoCorrente.Espessura
             txtPesoKg.Text = DadosArquivoCorrente.Massa
             txtAreametroquadr.Text = DadosArquivoCorrente.AreaPintura
-
-
-
 
             Dim connStringProtheus As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
             Using conn As New Npgsql.NpgsqlConnection(connStringProtheus)
@@ -470,25 +570,15 @@ Public Class frmDadosPecaCorrente
                 End Using
             End Using
 
-            ' 🔹 Atualiza apenas no final
-            '   bloqueiaEventosUI = False
-            Me.ResumeLayout()
-
-
-            ' 👇👇👇 ADICIONE ESTA ÚNICA LINHA AQUI 👇👇👇
+            ' 👇 Sincroniza propriedades customizadas
             SincronizarPropriedadesCustomizadasDoArquivo()
 
-
-            ' 🔹 Roda verificação em background
-            '  VerificaCadastroArquivo()
+            ' 🔹 Ativa os botões pois o documento foi carregado com sucesso
+            SetBotoesAtivos(True)
 
         Catch ex As Exception
-
-        Finally
-
-            'MessageBox.Show("Erro ao carregar propriedades:  " & ex.Message,
-            '            "SINCO - Solid Edge", MessageBoxButtons.OK, MessageBoxIcon.Error)
-
+            LimaprCampos()
+            SetBotoesAtivos(False)
         End Try
     End Sub
 
@@ -506,78 +596,43 @@ Public Class frmDadosPecaCorrente
 
         DadosArquivoCorrente.Titulo = ""
         txtTitulo.Clear()
+        txtNumeroDesenho.Clear()
+        txtendereco.Clear()
 
         DadosArquivoCorrente.AssuntoSubiTitulo = ""
         DadosArquivoCorrente.Comentarios = ""
-        ' [REMOVED] Me.cboAcabamento.Text = ""
-
         DadosArquivoCorrente.PalavraChave = ""
-        ' [REMOVED] txtPalavraChave.Clear()
-
         DadosArquivoCorrente.Author = ""
-        ' [REMOVED] txtAutor.Clear()
-
-
-        ' [REMOVED] txtEmpresa.Clear()
-
         DadosArquivoCorrente.Verificado = ""
-        ' [REMOVED] txtCategoria.Clear()
-
         DadosArquivoCorrente.Aprovado = ""
-        ' [REMOVED] txtGerente.Clear()
-
         DadosArquivoCorrente.material = ""
-        ' [REMOVED] txtMaterialSw.Clear()
-        '──────────────────────────────
-        ' 📅 Datas
-        '──────────────────────────────
-
         DadosArquivoCorrente.DataCriacaDesenho = ""
-        ' [REMOVED] txtData.Clear()
-
-
         DadosArquivoCorrente.DataUltimoSalvamento = ""
-        ' [REMOVED] txtDataR.Clear()
 
-
-        ' [REMOVED] txtData1.Clear()
-
-        '──────────────────────────────
-        ' 🧾 Revisão
-        '──────────────────────────────
-
-        ' txtRevisao.Clear()
-
-        '──────────────────────────────
-        ' 📐 Dimensões
-        '──────────────────────────────
-
+        ' Dimensões
         DadosArquivoCorrente.ComprimentoBlank = ""
         txtCutSizex.Clear()
-
 
         DadosArquivoCorrente.LarguraBlank = ""
         txtCutSizey.Clear()
 
-
         DadosArquivoCorrente.Espessura = ""
         txtEspessura.Clear()
-
-
 
         DadosArquivoCorrente.Massa = ""
         txtPesoKg.Clear()
 
-
-        '──────────────────────────────
-        ' 📏 Área (mm² → m²)
-        '──────────────────────────────
-
-
-
         DadosArquivoCorrente.AreaPintura = 0
         txtAreametroquadr.Clear()
 
+        ' Campos Protheus
+        txtB1_XREVM.Clear()
+        cboB1_GRUPO.SelectedIndex = -1
+        cboB1_GRUPO.Text = ""
+        cboB1_TIPO.SelectedIndex = -1
+        cboB1_TIPO.Text = ""
+        cboB1_UM.SelectedIndex = -1
+        cboB1_UM.Text = ""
 
     End Sub
 
@@ -783,7 +838,7 @@ Public Class frmDadosPecaCorrente
 
     End Sub
 
-    Public Sub AtivarVariaveisESincronizarPropriedades(Optional valorBloqueado As String = Nothing)
+    Public Sub AtivarVariaveisESincronizarPropriedades(Optional valorBloqueado As String = Nothing, Optional silencioso As Boolean = True)
         Try
 
             ' 1) Garante que app aponta para a instância correta do Solid Edge
@@ -792,12 +847,14 @@ Public Class frmDadosPecaCorrente
                     app = CType(Marshal.GetActiveObject("SolidEdge.Application"),
                             SolidEdgeFramework.Application)
                 Catch ex As Exception
-                    MessageBox.Show("Não foi possível localizar uma instância do Solid Edge aberta." &
-                                Environment.NewLine &
-                                "Detalhe: " & ex.Message,
-                                "Solid Edge",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Error)
+                    If Not silencioso Then
+                        MessageBox.Show("Não foi possível localizar uma instância do Solid Edge aberta." &
+                                    Environment.NewLine &
+                                    "Detalhe: " & ex.Message,
+                                    "Solid Edge",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Error)
+                    End If
                     Exit Sub
                 End Try
             End If
@@ -808,18 +865,22 @@ Public Class frmDadosPecaCorrente
             Try
                 qtdDocs = app.Documents.Count
             Catch ex As Exception
-                MessageBox.Show("Erro ao acessar app.Documents.Count: " & ex.Message,
-                            "Solid Edge",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error)
+                If Not silencioso Then
+                    MessageBox.Show("Erro ao acessar app.Documents.Count: " & ex.Message,
+                                "Solid Edge",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error)
+                End If
                 Exit Sub
             End Try
 
             If qtdDocs = 0 Then
-                MessageBox.Show("Nenhum documento de Solid Edge está aberto.",
-                            "Solid Edge",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information)
+                If Not silencioso Then
+                    MessageBox.Show("Nenhum documento de Solid Edge está aberto.",
+                                "Solid Edge",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information)
+                End If
                 Exit Sub
             End If
 
@@ -829,18 +890,22 @@ Public Class frmDadosPecaCorrente
             Try
                 doc = app.ActiveDocument
             Catch ex As Exception
-                MessageBox.Show("Erro ao acessar o documento ativo: " & ex.Message,
-                            "Solid Edge",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error)
+                If Not silencioso Then
+                    MessageBox.Show("Erro ao acessar o documento ativo: " & ex.Message,
+                                "Solid Edge",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error)
+                End If
                 Exit Sub
             End Try
 
             If doc Is Nothing Then
-                MessageBox.Show("Nenhum documento ativo encontrado no Solid Edge.",
-                            "Solid Edge",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information)
+                If Not silencioso Then
+                    MessageBox.Show("Nenhum documento ativo encontrado no Solid Edge.",
+                                "Solid Edge",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information)
+                End If
                 Exit Sub
             End If
 
@@ -1846,7 +1911,7 @@ Public Class frmDadosPecaCorrente
     Private Sub btnSalvarCadProtheus_Click(sender As Object, e As EventArgs) Handles btnSalvarCadProtheus.Click
 
         ' ============================================================
-        ' 🔹 Integração API Protheus (Criar ou Atualizar Produto) COM PROGRESSO
+        ' 🔹 Integração API Protheus via Node.js Middleware
         ' ============================================================
 
         ' 1. CONFIGURAÇÃO VISUAL INICIAL
@@ -1857,183 +1922,95 @@ Public Class frmDadosPecaCorrente
         System.Windows.Forms.Application.DoEvents()
 
         Try
-            ' Ignorar erros de certificado SSL (ambiente de testes/local) e forçar TLS 1.2
-            System.Net.ServicePointManager.SecurityProtocol = DirectCast(3072, System.Net.SecurityProtocolType) Or System.Net.SecurityProtocolType.Tls11 Or System.Net.SecurityProtocolType.Tls
-            System.Net.ServicePointManager.ServerCertificateValidationCallback = Function(s, cert, chain, sslPolicyErrors) True
+            ' Montar payload simplificado para enviar ao Node.js
+            Dim tituloLimpo As String = UCase(DadosArquivoCorrente.Titulo).Trim()
+            Dim codDesenho As String = DadosArquivoCorrente.NomeArquivoSemExtensao.Replace(".PSM", "").Replace(".PAR", "").Replace(".PRT", "").Replace(".ASM", "").Replace(".psm", "").Replace(".par", "").Replace(".prt", "").Replace(".asm", "")
+            If String.IsNullOrEmpty(codDesenho) Then codDesenho = "desenho_metalfisa"
+            Dim codigoSeguro As String = If(String.IsNullOrEmpty(codDesenho), "SEM_COD", codDesenho.ToUpper())
 
-            ' Passo 1 visual: Começando puxar o Token
-            ProgressBar1.Value = 25
-            System.Windows.Forms.Application.DoEvents()
+            Dim valGrupo As String = If(cboB1_GRUPO.SelectedValue IsNot Nothing, cboB1_GRUPO.SelectedValue.ToString(), cboB1_GRUPO.Text)
+            valGrupo = If(String.IsNullOrWhiteSpace(valGrupo), "", valGrupo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
 
-            ' 1. Obter Token Bearer
-            Dim tokenUrl As String = "https://192.168.1.60:47500/tlpp/oauth2/token?grant_type=password&username=sinco&password=Metal1120"
-            Dim tokenRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(tokenUrl), System.Net.HttpWebRequest)
-            tokenRequest.Method = "GET"
-            tokenRequest.Timeout = 10000 ' 10 segundos timeout
+            Dim valTipo As String = If(cboB1_TIPO.SelectedValue IsNot Nothing, cboB1_TIPO.SelectedValue.ToString(), cboB1_TIPO.Text)
+            valTipo = If(String.IsNullOrWhiteSpace(valTipo), "", valTipo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
 
-            Dim accessToken As String = ""
-            Using tokenResponse As System.Net.HttpWebResponse = CType(tokenRequest.GetResponse(), System.Net.HttpWebResponse)
-                Using reader As New System.IO.StreamReader(tokenResponse.GetResponseStream())
-                    Dim responseText As String = reader.ReadToEnd()
-                    ' Busca simples pelo token no JSON via Regex para evitar dependência externa
-                    Dim match As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(responseText, """access_token""\s*:\s*""([^""]+)""")
-                    If match.Success Then
-                        accessToken = match.Groups(1).Value
-                    End If
-                End Using
-            End Using
+            Dim valUM As String = If(cboB1_UM.SelectedValue IsNot Nothing, cboB1_UM.SelectedValue.ToString(), cboB1_UM.Text)
+            valUM = If(String.IsNullOrWhiteSpace(valUM), "", valUM.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
 
-            ' Passo 2 visual: Token lido com sucesso!
+            ' Validações padrão
+            If valGrupo.ToString = "" Or valTipo.ToString = "" Or valUM.ToString = "" Then
+                MsgBox("Os campos de Tipo, Unidade e Grupo são de preenchimento Obrigatório.", vbInformation)
+                Exit Sub
+            End If
+            If tituloLimpo.ToString = "" Then
+                MsgBox("O Titulo do desenho é de preenchimento Obrigatório", MsgBoxStyle.Exclamation, "Atenção")
+                Exit Sub
+            End If
+
             ProgressBar1.Value = 50
             System.Windows.Forms.Application.DoEvents()
 
-            ' 2. Realizar POST caso tenha obtido o token
-            If Not String.IsNullOrEmpty(accessToken) Then
 
-                ' Montar JSON dinâmico baseado na peça corrente com higienização p/ evitar JSON quebrado
-                Dim tituloLimpo As String = UCase(DadosArquivoCorrente.Titulo).Trim()
-                tituloLimpo = tituloLimpo.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
+            ' ============================================================
+            ' BLOCO COMENTADO DEVIDO A ERROS DE SINTAXE (Falta de Using/If)
+            ' ============================================================
+            ' Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
+            '     Dim responseResult As String = reader.ReadToEnd()
+            ' 
+            '     System.Diagnostics.Debug.WriteLine("SINCO: Produto tratado na API Protheus. Resposta: " & responseResult)
+            ' 
+            '     ' Supondo que responseResult venha da API Protheus
+            '     Dim chapaCodigoProtheus As String = ""
+            '     Dim novoOu As String = ""
+            ' 
+            '     ' 1. Extrair o conteúdo entre as chaves { }
+            '     Dim matchCodigo = Regex.Match(responseResult, "(?<=\{)[^}]+(?=\})")
+            '     If matchCodigo.Success Then
+            '         chapaCodigoProtheus = matchCodigo.Value
+            '     End If
+            ' 
+            '     ' 2. Lógica para identificar se foi Criado ou Alterado
+            '     If responseResult.ToLower().Contains("criado") Then
+            '         novoOu = "criado"
+            '     ElseIf responseResult.ToLower().Contains("atualizado") Then
+            '         novoOu = "Alterado"
+            '     End If
+            ' 
+            '     ' Log de conferência
+            '     '   System.Diagnostics.Debug.WriteLine("Chapa Código: " & chapaCodigoProtheus)
+            '     '  System.Diagnostics.Debug.WriteLine("Status Operação: " & novoOu)
+            ' 
+            '     If novoOu = "criado" Then
+            '         MsgBox("Produto Novo, o seu arquivo corrente deve ser renomeado para: " & chapaCodigoProtheus, vbInformation, "Novo Produto!!")
+            '     Else
+            '         EnviarSINCOWeb(matchCodigo.Value.ToString)
+            '     End If
+            ' 
+            ' End Using
+            ' 
+            ' End Using
+            ' 
+            ' Else
+            '     System.Diagnostics.Debug.WriteLine("SINCO: Falha ao obter token de acesso na API Protheus.")
+            ' End If
 
-                Dim codDesenho As String = DadosArquivoCorrente.NomeArquivoSemExtensao.Replace(".PSM", "").Replace(".PAR", "").Replace(".PRT", "").Replace(".ASM", "").Replace(".psm", "").Replace(".par", "").Replace(".prt", "").Replace(".asm", "")
-                If String.IsNullOrEmpty(codDesenho) Then codDesenho = "desenho_metalfisa"
-                codDesenho = codDesenho.Replace("""", "\""").Replace(vbCrLf, " ").Replace(vbLf, " ").Replace(vbCr, " ")
-
-                ' Captura com segurança apenas o Código selecionado
-                Dim valGrupo As String = If(cboB1_GRUPO.SelectedValue IsNot Nothing, cboB1_GRUPO.SelectedValue.ToString(), cboB1_GRUPO.Text)
-                valGrupo = If(String.IsNullOrWhiteSpace(valGrupo), "", valGrupo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
-
-                Dim valTipo As String = If(cboB1_TIPO.SelectedValue IsNot Nothing, cboB1_TIPO.SelectedValue.ToString(), cboB1_TIPO.Text)
-                valTipo = If(String.IsNullOrWhiteSpace(valTipo), "", valTipo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
-
-                Dim valUM As String = If(cboB1_UM.SelectedValue IsNot Nothing, cboB1_UM.SelectedValue.ToString(), cboB1_UM.Text)
-                valUM = If(String.IsNullOrWhiteSpace(valUM), "", valUM.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
-
-                ' Validações padrão
-                If valGrupo.ToString = "" Or valTipo.ToString = "" Or valUM.ToString = "" Then
-                    MsgBox("Os campos de Tipo, Unidade e Grupo são de preenchimento Obrigatório.", vbInformation)
-                    Exit Sub
-                End If
-
-                If tituloLimpo.ToString = "" Then
-                    MsgBox("O Titulo do desenho é de preenchimento Obrigatório", MsgBoxStyle.Exclamation, "Atenção")
-                    Exit Sub
-                End If
-
-                ' Passo 4 visual: Validações JSON passadas, Indo enviar o POST.
-                ProgressBar1.Value = 75
-                System.Windows.Forms.Application.DoEvents()
-
-                Dim pesoFormatado As String = DadosArquivoCorrente.PesoTotal.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                ' HIGIENIZA O CAMINHO DA MÁQUINA para virar texto de JSON seguro
-                Dim caminhoOriginalDoArquivo As String = Me.txtendereco.Text.Replace("\", "\\").Replace("""", "\""")
-                ' Função auxiliar para garantir que valores numéricos nunca fiquem vazios no JSON
-                Dim ValOrZero = Function(val As Object) As String
-                                    Dim s As String = If(val Is Nothing, "", val.ToString().Trim())
-                                    ' Se estiver vazio, retorna 0. Se não, garante que o decimal use ponto (.) e não vírgula (,)
-                                    Return If(s = "" Or s = ",", "0", s.Replace(",", "."))
-                                End Function
-
-                Dim jsonPayload As String = "{" &
-    " ""data"": {" &
-    "  ""produtos"": [" &
-    "    {" &
-    "     ""EMPRESA"": ""01""," &
-    "     ""CFILANT"": ""01""," &
-    "     ""NOPER"": ""3""," &
-    "     ""B1_COD"": """ & If(String.IsNullOrEmpty(codDesenho), "SEM_COD", codDesenho.ToUpper()) & """," &
-    "     ""B1_GRUPO"": """ & valGrupo & """," &
-    "     ""B1_DESC"": """ & tituloLimpo & """," &
-    "     ""B1_XREVM"": """ & Me.txtB1_XREVM.Text.Trim & """," &
-    "     ""B1_TIPO"": """ & valTipo & """," &
-    "     ""B1_UM"": """ & valUM & """," &
-    "     ""B1_LOCPAD"": ""03""," &
-    "     ""B1_POSIPI"": ""00000000""," &
-    "     ""B1_FINALID"": ""1""," &
-    "     ""B1_ORIGEM"": ""0""," &
-    "     ""B1_XCODDES"": """ & caminhoOriginalDoArquivo & """," &
-    "     ""B1_PESO"": " & ValOrZero(pesoFormatado) & "," &
-    "     ""B1_PESBRU"": " & ValOrZero(pesoFormatado) & "," &
-    "     ""B5_CEME"": """ & tituloLimpo & """," &
-    "     ""B5_COMPR"": " & ValOrZero(DadosArquivoCorrente.ComprimentoBlank) & "," &
-    "     ""B5_LARG"": " & ValOrZero(DadosArquivoCorrente.LarguraBlank) & "," &
-    "     ""B5_ESPESS"": " & ValOrZero(DadosArquivoCorrente.Espessura) & "," &
-    "     ""B5_VOLUME"": " & ValOrZero(DadosArquivoCorrente.AreaPintura) & "}" &
-    "  ]" &
-    " }" &
-    "}"
-
-                Dim postUrl As String = "https://192.168.1.60:47500/produtos/create"
-                Dim postRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
-                postRequest.Method = "POST"
-                postRequest.ContentType = "application/json"
-                postRequest.Headers.Add("Authorization", "Bearer " & accessToken)
-                postRequest.Timeout = 15000
-
-                Using writer As New System.IO.StreamWriter(postRequest.GetRequestStream())
-                    writer.Write(jsonPayload)
-                End Using
-
-                ' Enviar e ler a resposta do Protheus
-                Using postResponse As System.Net.HttpWebResponse = CType(postRequest.GetResponse(), System.Net.HttpWebResponse)
-
-                    Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
-                        Dim responseResult As String = reader.ReadToEnd()
-
-                        System.Diagnostics.Debug.WriteLine("SINCO: Produto tratado na API Protheus. Resposta: " & responseResult)
-
-                        ' Supondo que responseResult venha da API Protheus
-                        Dim chapaCodigoProtheus As String = ""
-                        Dim novoOu As String = ""
-
-                        ' 1. Extrair o conteúdo entre as chaves { }
-                        Dim matchCodigo = Regex.Match(responseResult, "(?<=\{)[^}]+(?=\})")
-                        If matchCodigo.Success Then
-                            chapaCodigoProtheus = matchCodigo.Value
-                        End If
-
-                        ' 2. Lógica para identificar se foi Criado ou Alterado
-                        If responseResult.ToLower().Contains("criado") Then
-                            novoOu = "criado"
-                        ElseIf responseResult.ToLower().Contains("atualizado") Then
-                            novoOu = "Alterado"
-                        End If
-
-                        ' Log de conferência
-                        '   System.Diagnostics.Debug.WriteLine("Chapa Código: " & chapaCodigoProtheus)
-                        '  System.Diagnostics.Debug.WriteLine("Status Operação: " & novoOu)
-
-                        If novoOu = "criado" Then
-
-                            MsgBox("Produto Novo, o seu arquivo corrente deve ser renomeado para: " & chapaCodigoProtheus, vbInformation, "Novo Produto!!")
-
-                        Else
-
-                            EnviarSINCOWeb(matchCodigo.Value.ToString)
-
-                        End If
-
-
-                        'If matchCodigo.Success Then
-                        '    ' Tirei o famigerado .Trim() por enquanto para vermos os espaços exatos
-                        '    MsgBox(matchCodigo.Groups(1).Value)
-                        'Else
-                        '    Dim codigoProtheusDefinitivo As String = matchCodigo.Groups(1).Value
-                        '    ' É Update: Já existia o cara
-                        '    EnviarSINCOWeb(codigoProtheusDefinitivo)
-                        'End If
-
+        Catch exAPI As System.Net.WebException
+            Dim erroDetalhado As String = exAPI.Message
+            If exAPI.Response IsNot Nothing Then
+                Try
+                    Using reader As New System.IO.StreamReader(exAPI.Response.GetResponseStream())
+                        Dim respText As String = reader.ReadToEnd()
+                        erroDetalhado &= vbCrLf & "Detalhes do Servidor: " & respText
                     End Using
-
-                End Using
-
-
-            Else
-                System.Diagnostics.Debug.WriteLine("SINCO: Falha ao obter token de acesso na API Protheus.")
+                Catch
+                End Try
             End If
+            System.Diagnostics.Debug.WriteLine("SINCO: Erro WebException Protheus -> " & erroDetalhado)
+            MsgBox("SINCO: Erro na integração com a API Protheus -> " & erroDetalhado, MsgBoxStyle.Critical, "Erro de API")
 
         Catch exAPI As Exception
             System.Diagnostics.Debug.WriteLine("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
-            MsgBox("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
+            MsgBox("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message, MsgBoxStyle.Critical, "Erro de API")
 
         Finally
             Me.Cursor = Cursors.Default
@@ -2052,7 +2029,210 @@ Public Class frmDadosPecaCorrente
     End Sub
 
     Private Sub btnListaConjunto_Click(sender As Object, e As EventArgs) Handles btnListaConjunto.Click
+        Try
+            executandoLote = True
+            If app Is Nothing OrElse app.Documents.Count = 0 Then Exit Sub
+            Dim doc As Object = app.ActiveDocument
+            If doc Is Nothing Then Exit Sub
 
+            Dim caminho As String = doc.FullName
+            Dim ext As String = IO.Path.GetExtension(caminho).ToLower()
+
+            If ext = ".asm" Then
+                timerAtualizacao.Stop()
+
+                ' ═══════════════════════════════════════════════════════════
+                ' PASSO 1: Expandir formulário e mostrar grid IMEDIATAMENTE
+                ' ═══════════════════════════════════════════════════════════
+                ExibirGridBOM(Nothing)
+
+                ' Posiciona o label de status e barra de progresso (visíveis no grid)
+                Dim labelStatus As New Label()
+                Try
+                    labelStatus.AutoSize = True
+                    labelStatus.Location = New System.Drawing.Point(ProgressBar1.Left, ProgressBar1.Top - 22)
+                    labelStatus.ForeColor = System.Drawing.Color.FromArgb(31, 54, 92)
+                    labelStatus.Font = New System.Drawing.Font("Segoe UI", 9.0!, System.Drawing.FontStyle.Bold)
+                    Me.Controls.Add(labelStatus)
+                    labelStatus.BringToFront()
+
+                    ProgressBar1.Value = 0
+                    ProgressBar1.Visible = True
+                    ProgressBar1.BringToFront()
+                    System.Windows.Forms.Application.DoEvents()
+
+                    ' ═══════════════════════════════════════════════════════════
+                    ' PASSO 2: Ler BOM diretamente no dgvBOM visível
+                    '          Linhas vão aparecendo em tempo real
+                    ' ═══════════════════════════════════════════════════════════
+                    Dim labelResumo As New Label()
+                    ListarEstruturaBomMateriais(dgvBOM, ProgressBar1, labelStatus, labelResumo)
+
+                    ' Verifica se obteve dados
+                    Dim dtBom As DataTable = TryCast(dgvBOM.DataSource, DataTable)
+                    If dtBom Is Nothing OrElse dtBom.Rows.Count = 0 Then
+                        MessageBox.Show("A estrutura (BOM) retornou vazia.", "SINCO - BOM", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    Else
+                        Dim qtdPecas As Integer = dtBom.Select("TipoLinha = 'PECA'").Length
+                        Dim qtdMat As Integer = dtBom.Select("TipoLinha = 'MATERIAL'").Length
+                        Dim qtdProc As Integer = dtBom.Select("TipoLinha = 'PROCESSO'").Length
+                        MessageBox.Show(
+                            "Leitura da BOM finalizada com sucesso!" & vbCrLf & vbCrLf &
+                            "  Peças: " & qtdPecas.ToString() & vbCrLf &
+                            "  Materiais: " & qtdMat.ToString() & vbCrLf &
+                            "  Processos: " & qtdProc.ToString() & vbCrLf &
+                            "  Total de linhas: " & dtBom.Rows.Count.ToString(),
+                            "SINCO - BOM Concluída", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    End If
+
+                Finally
+                    Try : Me.Controls.Remove(labelStatus) : Catch : End Try
+                    ProgressBar1.Visible = False
+                    ultimoDocumentoAnalisado = ""
+                    timerAtualizacao.Start()
+                End Try
+            Else
+                MsgBox("O arquivo ativo não é um conjunto (.ASM).", MsgBoxStyle.Exclamation, "SINCO - BOM")
+            End If
+        Catch ex As Exception
+            MessageBox.Show("Erro ao carregar BOM: " & ex.Message, "Erro BOM", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            executandoLote = False
+        End Try
+    End Sub
+
+    Private Sub ExibirGridBOM(dtBom As DataTable)
+        Me.SuspendLayout()
+        Try
+            ' --- Cria o grid somente na primeira vez ---
+            If dgvBOM Is Nothing Then
+                dgvBOM = New System.Windows.Forms.DataGridView()
+                dgvBOM.Name = "dgvBOM"
+                dgvBOM.Location = New System.Drawing.Point(8, 290)
+                dgvBOM.Size = New System.Drawing.Size(1109, 280)
+                dgvBOM.Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top Or AnchorStyles.Bottom
+                dgvBOM.AllowUserToAddRows = False
+                dgvBOM.ReadOnly = True
+                dgvBOM.SelectionMode = DataGridViewSelectionMode.FullRowSelect
+                dgvBOM.BackgroundColor = Color.White
+                dgvBOM.GridColor = Color.FromArgb(224, 224, 224)
+                dgvBOM.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252)
+                dgvBOM.Font = New Font("Segoe UI", 9.0!)
+                dgvBOM.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
+                dgvBOM.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(31, 54, 92)
+                dgvBOM.ColumnHeadersDefaultCellStyle.ForeColor = Color.White
+                dgvBOM.EnableHeadersVisualStyles = False
+                Me.Controls.Add(dgvBOM)
+            End If
+
+            ' --- Vincula os dados (aceita Nothing para grid vazio) ---
+            If dtBom IsNot Nothing Then
+                dgvBOM.DataSource = dtBom
+            End If
+
+            ' --- Colunas de ícone (apenas se ainda não existirem) ---
+            If Not dgvBOM.Columns.Contains("dgvdxf") Then
+                Dim colDxf As New DataGridViewImageColumn()
+                colDxf.Name = "dgvdxf"
+                colDxf.HeaderText = "DXF"
+                colDxf.Image = My.Resources.sem_icone
+                colDxf.ImageLayout = DataGridViewImageCellLayout.Zoom
+                colDxf.Width = 40
+                dgvBOM.Columns.Add(colDxf)
+            End If
+            If Not dgvBOM.Columns.Contains("dgvpdf") Then
+                Dim colPdf As New DataGridViewImageColumn()
+                colPdf.Name = "dgvpdf"
+                colPdf.HeaderText = "PDF"
+                colPdf.Image = My.Resources.sem_icone
+                colPdf.ImageLayout = DataGridViewImageCellLayout.Zoom
+                colPdf.Width = 40
+                dgvBOM.Columns.Add(colPdf)
+            End If
+
+            ' --- Expande o formulário ---
+            Me.MinimumSize = System.Drawing.Size.Empty
+            Me.MaximumSize = System.Drawing.Size.Empty
+            Me.ClientSize = New System.Drawing.Size(1120, 590)
+
+            ' --- Posiciona o grid ---
+            dgvBOM.Location = New System.Drawing.Point(8, 290)
+            dgvBOM.Size = New System.Drawing.Size(Me.ClientSize.Width - 16, Me.ClientSize.Height - 300)
+
+            ' --- Torna visível ---
+            dgvBOM.Visible = True
+            dgvBOM.BringToFront()
+
+        Finally
+            Me.ResumeLayout(True)
+            Me.Update()
+            If dgvBOM IsNot Nothing Then dgvBOM.Refresh()
+            System.Windows.Forms.Application.DoEvents()
+        End Try
+    End Sub
+
+    Private Sub ProcessarExportacaoBOM(dxfForcado As Boolean, pdfForcado As Boolean)
+        Try
+            executandoLote = True
+            timerAtualizacao.Stop()
+
+            ' ═══ PASSO 1: Expandir formulário e mostrar grid IMEDIATAMENTE ═══
+            Dim dtBom As DataTable = Nothing
+            If dgvBOM IsNot Nothing AndAlso dgvBOM.Visible AndAlso dgvBOM.DataSource IsNot Nothing Then
+                dtBom = TryCast(dgvBOM.DataSource, DataTable)
+            Else
+                ExibirGridBOM(Nothing)
+            End If
+
+            Dim labelStatus As New Label()
+            Try
+                labelStatus.AutoSize = True
+                labelStatus.Location = New System.Drawing.Point(ProgressBar1.Left, ProgressBar1.Top - 22)
+                labelStatus.ForeColor = System.Drawing.Color.FromArgb(31, 54, 92)
+                labelStatus.Font = New System.Drawing.Font("Segoe UI", 9.0!, System.Drawing.FontStyle.Bold)
+                Me.Controls.Add(labelStatus)
+                labelStatus.BringToFront()
+
+                ProgressBar1.Value = 0
+                ProgressBar1.Visible = True
+                ProgressBar1.BringToFront()
+                System.Windows.Forms.Application.DoEvents()
+
+                ' ═══ PASSO 2: Ler BOM diretamente no dgvBOM (se ainda não tem dados) ═══
+                If dtBom Is Nothing Then
+                    Dim labelResumo As New Label()
+                    ListarEstruturaBomMateriais(dgvBOM, ProgressBar1, labelStatus, labelResumo)
+                    dtBom = TryCast(dgvBOM.DataSource, DataTable)
+                End If
+
+                If dtBom Is Nothing OrElse dtBom.Rows.Count = 0 Then
+                    MessageBox.Show("A estrutura (BOM) do conjunto retornou vazia ou não pôde ser gerada.", "SINCO - Exportação", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    Exit Sub
+                End If
+
+                Dim tempChkDXF As New CheckBox() With {.Checked = chkdxf.Checked OrElse dxfForcado}
+                Dim tempChkPDF As New CheckBox() With {.Checked = chkPdf.Checked OrElse pdfForcado}
+                Dim tempChkIGES As New CheckBox() With {.Checked = chkiges.Checked}
+
+                If Not (tempChkDXF.Checked OrElse tempChkPDF.Checked OrElse tempChkIGES.Checked) Then
+                    tempChkDXF.Checked = dxfForcado
+                    tempChkPDF.Checked = pdfForcado
+                End If
+
+                ExportarPorGrid(dgvBOM, tempChkDXF, tempChkPDF, tempChkIGES, ProgressBar1, labelStatus, chkOpcaodePasta)
+
+                MessageBox.Show("Exportação da estrutura (BOM) em lote finalizada com sucesso!", "SINCO - Exportação", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Finally
+                Try : Me.Controls.Remove(labelStatus) : Catch : End Try
+                ultimoDocumentoAnalisado = ""
+                timerAtualizacao.Start()
+            End Try
+
+        Catch ex As Exception
+            MessageBox.Show("Erro ao realizar exportação em lote da BOM: " & ex.Message, "SINCO - Exportação", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            executandoLote = False
+        End Try
     End Sub
 
     Private Sub cboB1_TIPO_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboB1_TIPO.SelectedIndexChanged
@@ -2062,10 +2242,175 @@ Public Class frmDadosPecaCorrente
     Private Sub cboB1_TIPO_SelectedValueChanged(sender As Object, e As EventArgs) Handles cboB1_TIPO.SelectedValueChanged
 
     End Sub
+
+    Private Sub btnDxf_Click(sender As Object, e As EventArgs)
+
+    End Sub
+
+    'Private Sub btnDxf_Click(sender As Object, e As EventArgs) Handles btnDxf.Click
+
+    'End Sub
+
+    Private Sub btnLote_Click(sender As Object, e As EventArgs) Handles btnLote.Click
+        ' Validação das opções
+        If Not chkPdf.Checked AndAlso Not chkdxf.Checked Then
+            MessageBox.Show("Selecione pelo menos uma opção: Gerar PDF ou Gerar DXF.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Exit Sub
+        End If
+
+        ' Selecionar a pasta com o diálogo moderno
+        Dim fbd As New ModernFolderBrowserDialog()
+        fbd.Title = "Selecione a pasta com os arquivos do Solid Edge"
+
+        If fbd.ShowDialog(Me) = DialogResult.OK Then
+            Dim pastaOrigem As String = fbd.SelectedPath
+
+            ' Obter arquivos
+            Dim arquivos As New List(Of String)
+            Try
+                arquivos.AddRange(IO.Directory.GetFiles(pastaOrigem, "*.dft", IO.SearchOption.AllDirectories))
+                arquivos.AddRange(IO.Directory.GetFiles(pastaOrigem, "*.par", IO.SearchOption.AllDirectories))
+                arquivos.AddRange(IO.Directory.GetFiles(pastaOrigem, "*.psm", IO.SearchOption.AllDirectories))
+                arquivos.AddRange(IO.Directory.GetFiles(pastaOrigem, "*.asm", IO.SearchOption.AllDirectories))
+            Catch ex As Exception
+                MessageBox.Show("Erro ao ler os arquivos da pasta: " & ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End Try
+
+            If arquivos.Count = 0 Then
+                MessageBox.Show("Nenhum arquivo do Solid Edge encontrado na pasta selecionada.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Exit Sub
+            End If
+
+            ' Conectar ao Solid Edge
+            Try
+                If app Is Nothing Then
+                    Try
+                        app = Marshal.GetActiveObject("SolidEdge.Application")
+                    Catch ex As Exception
+                        app = Activator.CreateInstance(Type.GetTypeFromProgID("SolidEdge.Application"))
+                        app.Visible = True ' Opcional: mostrar ou esconder
+                    End Try
+                End If
+
+                ' Processar cada arquivo
+                For Each arquivo In arquivos
+                    Dim doc As Object = Nothing
+                    Try
+                        ' Abrir o arquivo
+                        doc = app.Documents.Open(arquivo)
+
+                        If doc IsNot Nothing Then
+                            ' Fazer as chamadas de exportação
+                            If chkPdf.Checked Then
+                                ExportarPDFDetalhamentoLote(0)
+                            End If
+
+                            If chkdxf.Checked Then
+                                ExportarDXFPlanificadoAuto(0)
+                            End If
+                        End If
+                    Catch ex As Exception
+                        ' Ignora erro para este arquivo específico, continua com o próximo
+                    Finally
+                        ' Fechar o documento
+                        If doc IsNot Nothing Then
+                            Try
+                                doc.Close()
+                            Catch exClose As Exception
+                            End Try
+                            Marshal.ReleaseComObject(doc)
+                            doc = Nothing
+                        End If
+                    End Try
+                Next
+
+                MessageBox.Show("Processamento em lote finalizado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+            Catch ex As Exception
+                MessageBox.Show("Erro de comunicação com o Solid Edge: " & ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
+        End If
+    End Sub
 End Class
 
+Public Class ModernFolderBrowserDialog
+    <ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")>
+    Private Class FileOpenDialog
+    End Class
 
+    <ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+    Private Interface IFileDialog
+        <PreserveSig> Function Show(<[In]> hwndOwner As IntPtr) As Integer
+        Sub SetFileTypes(<[In]> cFileTypes As UInteger, <[In]> rgFilterSpec As IntPtr)
+        Sub SetFileTypeIndex(<[In]> iFileType As UInteger)
+        Sub GetFileTypeIndex(<Out> ByRef piFileType As UInteger)
+        Sub Advise(<[In]> pfde As IntPtr, <Out> ByRef pdwCookie As UInteger)
+        Sub Unadvise(<[In]> dwCookie As UInteger)
+        Sub SetOptions(<[In]> fos As Integer)
+        Sub GetOptions(<Out> ByRef pfos As Integer)
+        Sub SetDefaultFolder(<[In]> psi As IntPtr)
+        Sub SetFolder(<[In]> psi As IntPtr)
+        Sub GetFolder(<Out> ByRef ppsi As IntPtr)
+        Sub GetCurrentSelection(<Out> ByRef ppsi As IntPtr)
+        Sub SetFileName(<[In], MarshalAs(UnmanagedType.LPWStr)> pszName As String)
+        Sub GetFileName(<Out, MarshalAs(UnmanagedType.LPWStr)> ByRef pszName As String)
+        Sub SetTitle(<[In], MarshalAs(UnmanagedType.LPWStr)> pszTitle As String)
+        Sub SetOkButtonLabel(<[In], MarshalAs(UnmanagedType.LPWStr)> pszText As String)
+        Sub SetFileNameLabel(<[In], MarshalAs(UnmanagedType.LPWStr)> pszLabel As String)
+        Sub GetResult(<Out> ByRef ppsi As IShellItem)
+        Sub AddPlace(<[In]> psi As IntPtr, <[In]> fdap As Integer)
+        Sub SetDefaultExtension(<[In], MarshalAs(UnmanagedType.LPWStr)> pszDefaultExtension As String)
+        Sub Close(<[In]> hr As Integer)
+        Sub SetClientGuid(<[In]> ByRef guid As Guid)
+        Sub ClearClientData()
+        Sub SetFilter(<[In]> pFilter As IntPtr)
+    End Interface
 
+    <ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+    Private Interface IShellItem
+        Sub BindToHandler(<[In]> pbc As IntPtr, <[In]> ByRef bhid As Guid, <[In]> ByRef riid As Guid, <Out> ByRef ppv As IntPtr)
+        Sub GetParent(<Out> ByRef ppsi As IShellItem)
+        Sub GetDisplayName(<[In]> sigdnName As Integer, <Out> ByRef ppszName As IntPtr)
+        Sub GetAttributes(<[In]> sfgaoMask As UInteger, <Out> ByRef psfgaoAttribs As UInteger)
+        Sub Compare(<[In]> psi As IShellItem, <[In]> hint As UInteger, <Out> ByRef piOrder As Integer)
+    End Interface
+
+    Public Property SelectedPath As String
+    Public Property Title As String = "Selecionar Pasta"
+
+    Public Function ShowDialog(owner As IWin32Window) As DialogResult
+        Dim dialog As IFileDialog = CType(New FileOpenDialog(), IFileDialog)
+        Try
+            Dim options As Integer
+            dialog.GetOptions(options)
+            ' FOS_PICKFOLDERS = 0x20
+            ' FOS_FORCEFILESYSTEM = 0x40
+            options = options Or &H20 Or &H40
+            dialog.SetOptions(options)
+            dialog.SetTitle(Title)
+
+            Dim hwnd As IntPtr = If(owner IsNot Nothing, owner.Handle, IntPtr.Zero)
+            Dim hr As Integer = dialog.Show(hwnd)
+            If hr = 0 Then
+                Dim item As IShellItem = Nothing
+                dialog.GetResult(item)
+                If item IsNot Nothing Then
+                    Dim ptr As IntPtr
+                    item.GetDisplayName(&H80058000, ptr) ' SIGDN_FILESYSPATH
+                    If ptr <> IntPtr.Zero Then
+                        SelectedPath = Marshal.PtrToStringAuto(ptr)
+                        Marshal.FreeCoTaskMem(ptr)
+                        Return DialogResult.OK
+                    End If
+                End If
+            End If
+            Return DialogResult.Cancel
+        Finally
+            Marshal.ReleaseComObject(dialog)
+        End Try
+    End Function
+End Class
 
 Module ModListarComponentesMontagem
 
@@ -2117,6 +2462,10 @@ Module ModListarComponentesMontagem
 
             Dim doc As Object = app.ActiveDocument
             If doc Is Nothing Then Exit Sub
+
+            If app IsNot Nothing Then
+                Try : app.DisplayAlerts = False : Catch : End Try
+            End If
 
             '============================================================
             ' 🔹 UI - estado inicial
@@ -2668,6 +3017,9 @@ Module ModListarComponentesMontagem
             RegistrarErro("Erro geral em ListarEstruturaComTodasPropriedadesBlank", ex)
 
         Finally
+            If app IsNot Nothing Then
+                Try : app.DisplayAlerts = True : Catch : End Try
+            End If
             pgb.Visible = False
 
             ' Se houve erros, mostra relatório organizado
@@ -2770,6 +3122,9 @@ Module ModListarComponentesMontagem
             End Try
         End Function
 
+        ' Declarado fora do Try para ser acessível no Finally
+        Dim cacheDocsAbertos As New Dictionary(Of String, Object)(StringComparer.OrdinalIgnoreCase)
+
         Try
             ' 1. Conexão com Solid Edge
             If app Is Nothing Then
@@ -2792,6 +3147,10 @@ Module ModListarComponentesMontagem
             End Try
 
             If doc Is Nothing Then Exit Sub
+
+            If app IsNot Nothing Then
+                Try : app.DisplayAlerts = False : Catch : End Try
+            End If
 
             ' 2. UI
             pgb.Visible = True
@@ -2832,6 +3191,31 @@ Module ModListarComponentesMontagem
             tabela.Columns.Add("QtdeMaterial", GetType(Double))
             tabela.Columns.Add("PesoMaterial", GetType(Double))
             '   tabela.Columns.Add("NovoRevisao", GetType(Double))
+
+            ' ═══ VINCULA O DATASOURCE AGORA — linhas aparecem em tempo real ═══
+            dgv.DataSource = tabela
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells
+
+            ' Oculta colunas internas imediatamente
+            Dim ocultar() As String = {"TipoArquivo", "CaminhoCompleto", "Categoria", "Gerente", "Autor", "Empresa", "Data", "DataR", "Data1", "Revision", "CutSizeX", "CutSizeY", "Mass", "Área_de_superfície", "Area_de_superficie", "Bloqueado", "RNC", "PesoTotal", "AreaPinturaTotal", "QtdeMaterial", "PesoMaterial", "CodMatFabricante", "DescDetal"}
+            For Each c In ocultar
+                If dgv.Columns.Contains(c) Then
+                    dgv.Columns(c).Visible = False
+                End If
+            Next
+            System.Windows.Forms.Application.DoEvents()
+
+            ' ═══ OTIMIZAÇÃO 2: Batch SQL para processos ═══
+            ' Carrega TODOS os processos em UMA query, filtra na memória
+            Dim dtTodosProcessos As DataTable = Nothing
+            Try
+                dtTodosProcessos = cl_BancoDados.CarregarDados(
+                    "SELECT mp.codmatfabricante, mp.IdProcesso, p.processofabricacao AS processofabricacao, mp.SequenciaExecucao " &
+                    "FROM material_processo mp " &
+                    "LEFT JOIN processofabricacao p ON p.idprocessofabricacao = mp.IdProcesso " &
+                    "ORDER BY mp.codmatfabricante, mp.SequenciaExecucao")
+            Catch
+            End Try
 
             Dim totalLidos As Integer = 0
             Dim totalEstimado As Integer = 1
@@ -2888,14 +3272,23 @@ Module ModListarComponentesMontagem
                             Catch
                             End Try
 
-                            If Not String.IsNullOrWhiteSpace(caminhoArquivo) AndAlso IO.File.Exists(caminhoArquivo) Then
-                                Try
-                                    docObjP = app.Documents.Open(caminhoArquivo)
-                                    abriuTemp = True
-                                Catch exOpen As Exception
-                                    RegistrarErro($"Reabrindo doc '{caminhoArquivo}'", exOpen)
+                            If Not String.IsNullOrWhiteSpace(caminhoArquivo) Then
+                                ' Usa cache — evita reabrir doc já carregado
+                                If cacheDocsAbertos.ContainsKey(caminhoArquivo) Then
+                                    docObjP = cacheDocsAbertos(caminhoArquivo)
+                                    abriuTemp = False
+                                ElseIf IO.File.Exists(caminhoArquivo) Then
+                                    Try
+                                        docObjP = app.Documents.Open(caminhoArquivo)
+                                        cacheDocsAbertos(caminhoArquivo) = docObjP
+                                        abriuTemp = False ' cache gerencia o fechamento
+                                    Catch exOpen As Exception
+                                        RegistrarErro($"Reabrindo doc '{caminhoArquivo}'", exOpen)
+                                        Exit While
+                                    End Try
+                                Else
                                     Exit While
-                                End Try
+                                End If
                             Else
                                 Exit While
                             End If
@@ -2972,38 +3365,28 @@ Module ModListarComponentesMontagem
                     End Try
                 End While
 
-                If abriuTemp AndAlso docObjP IsNot Nothing Then
-                    Try
-                        Dim isActive As Boolean = False
-                        Try
-                            isActive = (TryCast(docObjP, Object) Is app.ActiveDocument)
-                        Catch
-                            isActive = False
-                        End Try
-                        If Not isActive Then
-                            CallByName(docObjP, "Close", CallType.Method, False)
-                        End If
-                    Catch
-                    End Try
-                End If
+                ' Cache gerencia o fechamento — não fecha aqui
             End Sub
 
             ' ====================================================================
-            ' Adicionar Processos da Peça
+            ' Adicionar Processos da Peça (OTIMIZADO — filtra do batch em memória)
             ' ====================================================================
             Dim AdicionarProcessos As Action(Of Integer, String, Double) =
             Sub(nivelProc, codPecaProc, qTotProc)
                 Try
                     Dim nomeLimpo As String = IO.Path.GetFileNameWithoutExtension(codPecaProc)
-                    Dim sqlProc As String = "SELECT mp.IdProcesso, p.processofabricacao AS processofabricacao, mp.SequenciaExecucao " &
-                                            "FROM material_processo mp " &
-                                            "LEFT JOIN processofabricacao p ON p.idprocessofabricacao = mp.IdProcesso " &
-                                            "WHERE mp.codmatfabricante = '" & nomeLimpo.Replace("'", "''") & "' " &
-                                            "ORDER BY mp.SequenciaExecucao"
 
-                    Dim dtProc As DataTable = cl_BancoDados.CarregarDados(sqlProc)
-                    If dtProc IsNot Nothing AndAlso dtProc.Rows.Count > 0 Then
-                        For Each linhaProc As DataRow In dtProc.Rows
+                    ' Filtra do batch em memória (sem SQL individual)
+                    Dim linhasProc() As DataRow = Nothing
+                    If dtTodosProcessos IsNot Nothing Then
+                        Try
+                            linhasProc = dtTodosProcessos.Select("codmatfabricante = '" & nomeLimpo.Replace("'", "''") & "'")
+                        Catch
+                        End Try
+                    End If
+
+                    If linhasProc IsNot Nothing AndAlso linhasProc.Length > 0 Then
+                        For Each linhaProc As DataRow In linhasProc
                             Dim nomeProc As String = ""
                             Try : nomeProc = Convert.ToString(linhaProc("processofabricacao")) : Catch : End Try
 
@@ -3112,6 +3495,8 @@ Module ModListarComponentesMontagem
                     If obj Is Nothing Then Exit Sub
                     totalLidos += 1
                     lbl.Text = "Lendo: " & IO.Path.GetFileName(path)
+                    ' OTIMIZAÇÃO 3: DoEvents a cada 3 peças (menos overhead de message pump)
+                    If totalLidos Mod 3 = 0 Then System.Windows.Forms.Application.DoEvents()
 
                     Dim ext As String = IO.Path.GetExtension(path).ToLower()
                     Dim nome As String = IO.Path.GetFileName(path)
@@ -3152,11 +3537,17 @@ Module ModListarComponentesMontagem
                             Catch
                             End Try
 
-                            If subDoc Is Nothing AndAlso IO.File.Exists(subPath) Then
-                                Try
-                                    subDoc = app.Documents.Open(subPath)
-                                Catch
-                                End Try
+                            ' Usa cache para evitar abrir o mesmo doc múltiplas vezes
+                            If subDoc Is Nothing AndAlso Not String.IsNullOrEmpty(subPath) Then
+                                If cacheDocsAbertos.ContainsKey(subPath) Then
+                                    subDoc = cacheDocsAbertos(subPath)
+                                ElseIf IO.File.Exists(subPath) Then
+                                    Try
+                                        subDoc = app.Documents.Open(subPath)
+                                        cacheDocsAbertos(subPath) = subDoc
+                                    Catch
+                                    End Try
+                                End If
                             End If
 
                             Dim qItem As Double = 1.0
@@ -3193,18 +3584,7 @@ Module ModListarComponentesMontagem
 
                         If sObj IsNot Nothing Then
                             Ler(sObj, sPath, niv + 1, qFilhoLocal, qFilhoTotal)
-                            Try
-                                Dim active As Boolean = False
-                                Try
-                                    active = (TryCast(sObj, Object) Is app.ActiveDocument)
-                                Catch
-                                End Try
-
-                                If Not active Then
-                                    CallByName(sObj, "Close", CallType.Method, False)
-                                End If
-                            Catch
-                            End Try
+                            ' NÃO fecha aqui — o cache gerencia o fechamento no Finally
                         Else
                             Dim sNome = IO.Path.GetFileName(sPath)
                             Dim sTipo = IO.Path.GetExtension(sPath).Replace(".", "").ToUpper()
@@ -3231,11 +3611,11 @@ Module ModListarComponentesMontagem
                 End If
             Next
 
+            ' Re-vincula após limpeza para atualizar o grid
+            dgv.DataSource = Nothing
             dgv.DataSource = tabela
-            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells
 
-            Dim ocultar() As String = {"TipoArquivo", "CaminhoCompleto", "Categoria", "Gerente", "Autor", "Empresa", "Data", "DataR", "Data1", "Revision", "CutSizeX", "CutSizeY", "Mass", "Área_de_superfície", "Area_de_superficie", "Bloqueado", "RNC", "PesoTotal", "AreaPinturaTotal", "QtdeMaterial", "PesoMaterial", "CodMatFabricante", "DescDetal"}
-
+            ' Re-oculta colunas internas (DataSource rebind pode reexibir)
             For Each c In ocultar
                 If dgv.Columns.Contains(c) Then
                     dgv.Columns(c).Visible = False
@@ -3244,9 +3624,27 @@ Module ModListarComponentesMontagem
 
             lblResumo.Text = $"Total de Peças: {qtdTotalGeral}"
             pgb.Visible = False
+            System.Windows.Forms.Application.DoEvents()
 
         Catch ex As Exception
             MessageBox.Show("Erro Fatal: " & ex.Message)
+        Finally
+            ' ═══ Fecha todos os documentos do cache ═══
+            For Each kvp In cacheDocsAbertos
+                Try
+                    Dim isActive As Boolean = False
+                    Try : isActive = (TryCast(kvp.Value, Object) Is app.ActiveDocument) : Catch : End Try
+                    If Not isActive Then
+                        CallByName(kvp.Value, "Close", CallType.Method, False)
+                    End If
+                Catch
+                End Try
+            Next
+            cacheDocsAbertos.Clear()
+
+            If app IsNot Nothing Then
+                Try : app.DisplayAlerts = True : Catch : End Try
+            End If
         End Try
     End Sub
 
@@ -3339,6 +3737,7 @@ Module ModListarComponentesMontagem
 
         ' Evita processar o mesmo arquivo mais de uma vez nesta execução
         Dim arquivosProcessados As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Dim errosLote As New List(Of String)()
 
         Try
             If dgv.Rows.Count = 0 Then
@@ -3347,18 +3746,16 @@ Module ModListarComponentesMontagem
             End If
 
             '──────────────────────────────────────────────
-            ' 📁 LÓGICA DE PASTA CORRIGIDA (Pergunta antes do loop)
+            ' 📁 Pasta de destino (pergunta UMA VEZ antes do loop)
             '──────────────────────────────────────────────
             Dim pastaDestinoLote As String = ""
-
-            ' Se chkOpcaodePasta = False (Ex: Salvar tudo em uma pasta selecionada)
             If chkOpcaodePasta.Checked = False Then
                 Using fbd As New FolderBrowserDialog()
                     fbd.Description = "Selecione a pasta de destino para salvar TODOS os arquivos exportados:"
                     If fbd.ShowDialog() = DialogResult.OK Then
                         pastaDestinoLote = fbd.SelectedPath
                     Else
-                        Exit Sub ' Usuário cancelou, aborta o processo
+                        Exit Sub
                     End If
                 End Using
             End If
@@ -3375,39 +3772,46 @@ Module ModListarComponentesMontagem
             Try : primeiroArquivo = dgv.Rows(0).Cells("CaminhoCompleto").Value?.ToString()?.Trim() : Catch : End Try
 
             app.DisplayAlerts = False
-            BarraProgresso.Visible = True
+
+            ' ── Garante Style Continuous (pode ter ficado em Marquee da leitura anterior) ──
+            BarraProgresso.Style = ProgressBarStyle.Continuous
             BarraProgresso.Minimum = 0
             BarraProgresso.Maximum = total
             BarraProgresso.Value = 0
+            BarraProgresso.Visible = True
+            BarraProgresso.Refresh()
+            System.Windows.Forms.Application.DoEvents()
 
             '──────────────────────────────────────────────
-            ' 🔁 Loop principal
+            ' 🔁 Loop principal — um arquivo por vez
             '──────────────────────────────────────────────
             For Each row As DataGridViewRow In dgv.Rows
+                Dim caminhoAtual As String = ""
                 Try
+                    '── Lê campos da linha ──
                     Dim Bloqueado As String = row.Cells("Bloqueado").Value?.ToString()?.Trim().ToUpperInvariant()
-
                     If Bloqueado = "SIM" Then
-                        row.Cells("Bloqueado").Style.BackColor = Color.LightGreen
+                        Try : row.Cells("Bloqueado").Style.BackColor = Color.LightGreen : Catch : End Try
                         Continue For
                     End If
 
-                    Dim caminho As String = row.Cells("CaminhoCompleto").Value?.ToString()?.Trim()
+                    caminhoAtual = row.Cells("CaminhoCompleto").Value?.ToString()?.Trim()
                     Dim txttipodesenho As String = row.Cells("Tipo de Desenho").Value?.ToString()?.Trim()
-                    If String.IsNullOrWhiteSpace(caminho) OrElse Not File.Exists(caminho) Then Continue For
 
-                    Dim extensao As String = IO.Path.GetExtension(caminho).ToLower()
-                    Dim nomeArquivo As String = IO.Path.GetFileNameWithoutExtension(caminho)
-                    Dim pastaOriginal As String = IO.Path.GetDirectoryName(caminho)
-
-                    ' Define a pasta final para este arquivo
-                    Dim pastaDestinoFinal As String = pastaOriginal
-                    If chkOpcaodePasta.Checked = False Then
-                        pastaDestinoFinal = pastaDestinoLote ' Usa a pasta selecionada no FBD
+                    If String.IsNullOrWhiteSpace(caminhoAtual) OrElse Not File.Exists(caminhoAtual) Then
+                        Continue For
                     End If
 
-                    Dim caminhoFull = IO.Path.GetFullPath(caminho)
+                    Dim extensao As String = IO.Path.GetExtension(caminhoAtual).ToLower()
+                    Dim nomeArquivo As String = IO.Path.GetFileNameWithoutExtension(caminhoAtual)
+                    Dim pastaOriginal As String = IO.Path.GetDirectoryName(caminhoAtual)
 
+                    ' Pasta de saída: mesma do arquivo (chkOpcaodePasta=True) ou pasta escolhida
+                    Dim pastaDestinoFinal As String = If(chkOpcaodePasta.Checked, pastaOriginal, pastaDestinoLote)
+
+                    Dim caminhoFull As String = IO.Path.GetFullPath(caminhoAtual)
+
+                    '── Já processado? Atualiza ícone e pula ──
                     If arquivosProcessados.Contains(caminhoFull) Then
                         Try
                             If chkDXF.Checked Then
@@ -3420,10 +3824,9 @@ Module ModListarComponentesMontagem
                         End Try
                         Continue For
                     End If
-
                     arquivosProcessados.Add(caminhoFull)
 
-                    ' Fecha documentos abertos
+                    '── Fecha todos os documentos abertos no SE ──
                     Try
                         For Each d As Object In app.Documents
                             Try : d.Close(False) : Catch : End Try
@@ -3431,33 +3834,45 @@ Module ModListarComponentesMontagem
                     Catch
                     End Try
 
-                    ' Abre o arquivo atual
+                    '── Atualiza status — renderiza ANTES do Open bloqueante ──
+                    lbl.Text = "[" & (processados + 1).ToString() & "/" & total.ToString() & "] Abrindo: " & nomeArquivo & extensao & "..."
+                    lbl.Refresh()
+                    ' Muda para Marquee durante o Open (mostra atividade enquanto o SE carrega)
+                    BarraProgresso.Style = ProgressBarStyle.Marquee
+                    BarraProgresso.MarqueeAnimationSpeed = 25
+                    BarraProgresso.Refresh()
+                    System.Windows.Forms.Application.DoEvents()
+
+                    '── Abre o arquivo 3D no Solid Edge ──
                     Dim doc As Object = Nothing
                     Try
-                        doc = app.Documents.Open(caminho)
+                        doc = app.Documents.Open(caminhoAtual)
                         doc.Activate()
                         app.DoIdle()
-                        Threading.Thread.Sleep(200)
-                    Catch
+                        Threading.Thread.Sleep(300)
+                    Catch exAbrir As Exception
+                        errosLote.Add("Falha ao abrir '" & nomeArquivo & "': " & exAbrir.Message)
+                        BarraProgresso.Style = ProgressBarStyle.Continuous
                         Continue For
                     End Try
 
+                    ' Volta para Continuous após o Open terminar
+                    BarraProgresso.Style = ProgressBarStyle.Continuous
+                    BarraProgresso.Refresh()
+
                     '──────────────────────────────────────────────
-                    ' 🔹 Exportar DXF
+                    ' 🔹 Exportar DXF (apenas .psm — chapa metálica)
                     '──────────────────────────────────────────────
                     If chkDXF.Checked Then
-                        'If caminho.Contains("MT1-") Or caminho.Contains("MT2-") Or caminho.Contains("MT7-") Or caminho.Contains("MT8-") Or caminho.Contains("MTA") Or caminho.Contains("MPT") Then
-                        'Continue For
-                        'Else
                         Select Case extensao
-                            Case ".psm", ".par"
+                            Case ".psm"
                                 Try
                                     Dim dxfDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".dxf")
+                                    lbl.Text = $"DXF: {nomeArquivo}"
+                                    System.Windows.Forms.Application.DoEvents()
 
-                                    ' Chama a função passando O CAMINHO COMPLETO E CORRETO
                                     ExportarDXFPlanificadoAuto(dxfDestino)
 
-                                    ' Aguarda até o arquivo existir
                                     Dim tentativas As Integer = 0
                                     Do Until File.Exists(dxfDestino) OrElse tentativas > 20
                                         Threading.Thread.Sleep(250)
@@ -3469,69 +3884,124 @@ Module ModListarComponentesMontagem
                                         exportadosDXF += 1
                                     Else
                                         row.Cells("dgvdxf").Value = My.Resources.sem_icone
+                                        errosLote.Add($"⚠️ DXF não gerado para '{nomeArquivo}' (planificação pode não existir)")
                                     End If
-                                Catch
+                                Catch exDxf As Exception
                                     row.Cells("dgvdxf").Value = My.Resources.sem_icone
+                                    errosLote.Add($"❌ Erro DXF '{nomeArquivo}': {exDxf.Message}")
                                 End Try
+
+                            Case ".par"
+                                ' .PAR = peça sólida — tenta gerar DXF blank (SaveAsFlatDXFEx)
+                                Try
+                                    Dim dxfDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".dxf")
+                                    lbl.Text = $"DXF: {nomeArquivo}"
+                                    System.Windows.Forms.Application.DoEvents()
+
+                                    ExportarDXFPlanificadoAuto(dxfDestino)
+
+                                    Dim tentativas As Integer = 0
+                                    Do Until File.Exists(dxfDestino) OrElse tentativas > 20
+                                        Threading.Thread.Sleep(250)
+                                        tentativas += 1
+                                    Loop
+
+                                    If File.Exists(dxfDestino) Then
+                                        row.Cells("dgvdxf").Value = My.Resources.dxf
+                                        exportadosDXF += 1
+                                    Else
+                                        row.Cells("dgvdxf").Value = My.Resources.sem_icone
+                                        errosLote.Add($"⚠️ DXF blank não gerado para '{nomeArquivo}.par' (arquivo pode não ter planificação)")
+                                    End If
+                                Catch exDxfPar As Exception
+                                    row.Cells("dgvdxf").Value = My.Resources.sem_icone
+                                    errosLote.Add($"⚠️ DXF ignorado para '{nomeArquivo}.par': {exDxfPar.Message}")
+                                End Try
+
                             Case Else
                                 row.Cells("dgvdxf").Value = My.Resources.sem_icone
                         End Select
                     End If
-                    ' End If
 
                     '──────────────────────────────────────────────
-                    ' 🔹 Exportar PDF (Ajuste suas chamadas de PDF/IGES da mesma forma)
+                    ' 🔹 Exportar PDF via Detalhamento (.dft)
                     '──────────────────────────────────────────────
-                    ' Exemplo de como ficará o PDF:
                     If chkPDF.Checked Then
                         Try
                             Dim pdfDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".pdf")
+                            Dim caminhoDFT As String = IO.Path.Combine(pastaOriginal, nomeArquivo & ".dft")
 
-                            ' Nota: Altere sua função ExportarPDFDetalhamentoLote para receber o pdfDestino como parâmetro
-                            ExportarPDFDetalhamentoLote(pdfDestino)
+                            lbl.Text = $"PDF: {nomeArquivo}"
+                            System.Windows.Forms.Application.DoEvents()
 
-                            Dim tentativas As Integer = 0
-                            Do Until File.Exists(pdfDestino) OrElse tentativas > 20
-                                Threading.Thread.Sleep(250)
-                                tentativas += 1
-                            Loop
-
-                            If File.Exists(pdfDestino) Then
-                                row.Cells("dgvpdf").Value = My.Resources.pdf
-                                exportadosPDF += 1
-                            Else
+                            If Not File.Exists(caminhoDFT) Then
                                 row.Cells("dgvpdf").Value = My.Resources.sem_icone
+                                errosLote.Add($"⚠️ PDF pulado — não existe detalhamento '{nomeArquivo}.dft'")
+                            Else
+                                ' Exporta diretamente do .dft sem depender de ActiveDocument
+                                ExportarPDFDoDetalhamento(caminhoDFT, pdfDestino)
+
+                                Dim tentativas As Integer = 0
+                                Do Until File.Exists(pdfDestino) OrElse tentativas > 20
+                                    Threading.Thread.Sleep(250)
+                                    tentativas += 1
+                                Loop
+
+                                If File.Exists(pdfDestino) Then
+                                    row.Cells("dgvpdf").Value = My.Resources.pdf
+                                    exportadosPDF += 1
+                                Else
+                                    row.Cells("dgvpdf").Value = My.Resources.sem_icone
+                                    errosLote.Add($"⚠️ PDF não gerado para '{nomeArquivo}'")
+                                End If
                             End If
-                        Catch
+                        Catch exPdf As Exception
                             row.Cells("dgvpdf").Value = My.Resources.sem_icone
+                            errosLote.Add($"❌ Erro PDF '{nomeArquivo}': {exPdf.Message}")
                         End Try
                     End If
 
-                    If chkIGES.Checked And txttipodesenho = "CORTE LASER TUBO" Then
+                    '── IGES (laser tubo) ──
+                    If chkIGES.Checked AndAlso txttipodesenho = "CORTE LASER TUBO" Then
                         Try
                             Dim igesDestino As String = IO.Path.Combine(pastaDestinoFinal, nomeArquivo & ".iges")
                             ExportarIGESAuto(igesDestino)
-                        Catch
+                        Catch exIges As Exception
+                            errosLote.Add($"❌ Erro IGES '{nomeArquivo}': {exIges.Message}")
                         End Try
                     End If
 
-                    ' Fecha documento sem salvar
+                    '── Fecha documento 3D sem salvar ──
                     Try : doc.Close(False) : Catch : End Try
 
                     processados += 1
-                    BarraProgresso.Value = processados
-                    lbl.Text = processados.ToString()
 
-                Catch
+                    ' Truque para contornar a animação lenta do ProgressBar no Windows 10/11:
+                    ' Setar Value+1 primeiro e depois o valor real força redesenho imediato.
+                    BarraProgresso.Style = ProgressBarStyle.Continuous
+                    Dim valorAtual As Integer = Math.Min(processados, total)
+                    If valorAtual < total Then
+                        BarraProgresso.Value = valorAtual + 1
+                    End If
+                    BarraProgresso.Value = valorAtual
+
+                    lbl.Text = processados.ToString() & "/" & total.ToString() & " — " & nomeArquivo
+                    BarraProgresso.Refresh()
+                    lbl.Refresh()
+                    System.Windows.Forms.Application.DoEvents()
+
+                Catch exLinha As Exception
+                    errosLote.Add($"❌ Erro inesperado '{IO.Path.GetFileName(caminhoAtual)}': {exLinha.Message}")
                 End Try
             Next
 
-            ' Reabre o primeiro
+            '── Garante que colunas de status estão visíveis ──
             Try
                 dgv.Columns("dgvdxf").Visible = True
                 dgv.Columns("dgvpdf").Visible = True
             Catch : End Try
 
+            '── Reabre o primeiro arquivo do conjunto ──
             Try
                 If Not String.IsNullOrWhiteSpace(primeiroArquivo) AndAlso File.Exists(primeiroArquivo) Then
                     Threading.Thread.Sleep(500)
@@ -3541,13 +4011,31 @@ Module ModListarComponentesMontagem
                 End If
             Catch : End Try
 
-            ' Finalização
+            '── Finalização ──
             app.DisplayAlerts = True
             BarraProgresso.Visible = False
             BarraProgresso.Value = 0
             lbl.Text = ""
 
+            '── Resumo final ──
+            Dim resumo As New System.Text.StringBuilder()
+            resumo.AppendLine($"✅ DXF exportados: {exportadosDXF}")
+            resumo.AppendLine($"✅ PDF exportados: {exportadosPDF}")
+            If errosLote.Count > 0 Then
+                resumo.AppendLine()
+                resumo.AppendLine("Avisos/Erros (" & errosLote.Count.ToString() & "):")
+                Dim maxErros As Integer = Math.Min(errosLote.Count, 15)
+                For i As Integer = 0 To maxErros - 1
+                    resumo.AppendLine("  " & errosLote(i))
+                Next
+                If errosLote.Count > 15 Then resumo.AppendLine("  ... e mais " & (errosLote.Count - 15).ToString() & " avisos.")
+            End If
+            MessageBox.Show(resumo.ToString(), "SINCO - Resultado da Exportação", MessageBoxButtons.OK,
+                            If(errosLote.Count > 0, MessageBoxIcon.Warning, MessageBoxIcon.Information))
+
         Catch ex As Exception
+            Try : app.DisplayAlerts = True : Catch : End Try
+            MessageBox.Show("Erro fatal no lote: " & ex.Message, "SINCO - Exportação", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 

@@ -164,6 +164,19 @@ Public Class clDadosArquivoCorrente
 
     Public Sub SalvarCorrente()
         Try
+            ' 🔹 Se o documento ativo no Solid Edge for somente leitura, aborta salvamento no banco de dados MySQL
+            Try
+                Dim seApp As Object = Marshal.GetActiveObject("SolidEdge.Application")
+                If seApp IsNot Nothing AndAlso seApp.Documents.Count > 0 Then
+                    Dim activeDoc As Object = seApp.ActiveDocument
+                    If activeDoc IsNot Nothing AndAlso activeDoc.ReadOnly Then
+                        Exit Sub
+                    End If
+                End If
+            Catch ex As Exception
+                ' Prossegue caso não consiga validar
+            End Try
+
             ' ============================================================
             ' 🔹 Verifica tipo de conexão
             ' ============================================================

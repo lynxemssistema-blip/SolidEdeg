@@ -169,6 +169,13 @@
   <metadata name="TimerdgvGabaritos.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>1326, 62</value>
   </metadata>
+  <data name="btnLote.ToolTip" xml:space="preserve">
+    <value>📂 Clique aqui para ler os dados do arquivo atual.
+
+🧩 Caso seja um desenho de conjunto, todas as peças serão listadas.
+
+✅ Se estiver tudo correto, elas poderão ser inseridas em uma Ordem de Serviço.</value>
+  </data>
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>187</value>
   </metadata>
