@@ -9,56 +9,66 @@ Public Class clUsuario
 
     Public Function RetornaDadosUsuario(ByVal LoginEntrada As String, ByVal SenhaEntrada As String) As Boolean
 
-        Dim postUrl As String = "http://192.168.1.77:3001/api/auth/login"
-        Dim request As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
-        request.Method = "POST"
-        request.ContentType = "application/json"
+        Dim LoginLimpo As String = If(LoginEntrada, "").Trim()
+        Dim SenhaLimpa As String = If(SenhaEntrada, "").Trim()
 
-        Dim LoginLimpo As String = LoginEntrada.Trim()
-        Dim SenhaLimpa As String = SenhaEntrada.Trim()
+        If String.IsNullOrEmpty(LoginLimpo) Then
+            Return False
+        End If
 
-        ' Prepara o JSON com usuário e senha sem os espaços em branco acidentais
-        Dim postData As String = "{""login"":""" & LoginLimpo.Replace("""", "\""") & """,""senha"":""" & SenhaLimpa.Replace("""", "\""") & """}"
-        Dim byteArray As Byte() = System.Text.Encoding.UTF8.GetBytes(postData)
-        request.ContentLength = byteArray.Length
+        Dim apiAutenticou As Boolean = False
 
+        ' 1. Tenta autenticação prévia via API (caso o ambiente web/Node esteja em execução)
         Try
+            Dim postUrl As String = "http://192.168.1.77:3001/api/auth/login"
+            Dim request As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+            request.Method = "POST"
+            request.ContentType = "application/json"
+            request.Timeout = 2500 ' Timeout ágil de 2.5s para não travar caso a API esteja inacessível
+
+            Dim postData As String = "{""login"":""" & LoginLimpo.Replace("""", "\""") & """,""senha"":""" & SenhaLimpa.Replace("""", "\""") & """}"
+            Dim byteArray As Byte() = System.Text.Encoding.UTF8.GetBytes(postData)
+            request.ContentLength = byteArray.Length
+
             Using dataStream As System.IO.Stream = request.GetRequestStream()
                 dataStream.Write(byteArray, 0, byteArray.Length)
             End Using
 
-            ' Tenta realizar o login via API (que lida com bcrypt e gera o token)
             Using response As System.Net.HttpWebResponse = CType(request.GetResponse(), System.Net.HttpWebResponse)
                 If response.StatusCode = System.Net.HttpStatusCode.OK Then
                     Using reader As New System.IO.StreamReader(response.GetResponseStream())
                         Dim responseFromServer As String = reader.ReadToEnd()
-                        ' Aqui poderíamos parsear o JSON para pegar o Token, usando algo simples
                         Try
                             Dim jsonObj As Object = Newtonsoft.Json.Linq.JObject.Parse(responseFromServer)
                             TokenAPI = jsonObj("token").ToString()
                         Catch exToken As Exception
-                            ' Fallback caso não consiga ler o token
                         End Try
+                        apiAutenticou = True
                     End Using
                 End If
             End Using
-        Catch ex As System.Net.WebException
-            ' Se a API retornar erro (401 - Unauthorized, etc), a senha é inválida
-            RetornaDadosUsuario = False
-            Return False
         Catch ex As Exception
-            ' Outros erros de rede
-            RetornaDadosUsuario = False
-            Return False
+            ' API indisponível ou falhou: prossegue com autenticação direta no banco MySQL
+            apiAutenticou = False
         End Try
 
-        ' Se passou da API sem Exception, o login é válido. 
-        ' Agora resgatamos as informações preenchendo as variáveis, mas apenas pelo Login.
-        cl_BancoDados.AbrirBanco()
-        If My.Settings.TipoConexao = "MYSQL" Then
-            Try
-                Using da As New MySqlCommand("SELECT * FROM  " & ComplementoTipoBanco & "usuario WHERE Login = @Login", myconect)
+        ' 2. Validação e carregamento dos dados do usuário diretamente no MySQL
+        Try
+            cl_BancoDados.AbrirBanco()
+
+            If My.Settings.TipoConexao = "MYSQL" Then
+                Dim sql As String
+                If apiAutenticou Then
+                    sql = "SELECT * FROM " & ComplementoTipoBanco & "usuario WHERE Login = @Login AND (D_E_L_E_T_E <> '*' OR D_E_L_E_T_E IS NULL) LIMIT 1"
+                Else
+                    sql = "SELECT * FROM " & ComplementoTipoBanco & "usuario WHERE Login = @Login AND Senha = @Senha AND (D_E_L_E_T_E <> '*' OR D_E_L_E_T_E IS NULL) LIMIT 1"
+                End If
+
+                Using da As New MySqlCommand(sql, myconect)
                     da.Parameters.AddWithValue("@Login", LoginLimpo)
+                    If Not apiAutenticou Then
+                        da.Parameters.AddWithValue("@Senha", SenhaLimpa)
+                    End If
 
                     Using dr As MySqlDataReader = da.ExecuteReader()
                         If dr.HasRows Then
@@ -88,19 +98,20 @@ Public Class clUsuario
                             SolidWorks = dr("SolidWorks").ToString()
                             Sigla = dr("Sigla").ToString()
 
-                            RetornaDadosUsuario = True
+                            Return True
                         Else
-                            RetornaDadosUsuario = False
+                            Return False
                         End If
                     End Using
                 End Using
-            Catch ex As Exception
-                RetornaDadosUsuario = False
-            Finally
-            End Try
-        End If
-
-        cl_BancoDados.FecharBanco()
+            Else
+                Return False
+            End If
+        Catch ex As Exception
+            Return False
+        Finally
+            cl_BancoDados.FecharBanco()
+        End Try
 
     End Function
 
@@ -112,43 +123,31 @@ Public Class clUsuario
 
     Public Function RetornaDadosConfiguracao() As Boolean
 
-        cl_BancoDados.AbrirBanco()
-        If My.Settings.TipoConexao = "MYSQL" Then
+        Try
+            cl_BancoDados.AbrirBanco()
 
-            Try
-
-                Using da As New MySqlCommand("SELECT * FROM  " & ComplementoTipoBanco & "configucacaosistema WHERE idconfigucacaosistema = 1 and d_e_l_e_t_e <> '*' or d_e_l_e_t_e is null", myconect)
-                    ' Adicionar parâmetros para evitar SQL Injection
-
-                    ' Executar o comando e abrir o DataReader
+            If My.Settings.TipoConexao = "MYSQL" Then
+                Using da As New MySqlCommand("SELECT * FROM " & ComplementoTipoBanco & "configucacaosistema WHERE idconfigucacaosistema = 1 AND (d_e_l_e_t_e <> '*' OR d_e_l_e_t_e IS NULL) LIMIT 1", myconect)
                     Using dr As MySqlDataReader = da.ExecuteReader()
-                        ' Verificar se há linhas retornadas
                         If dr.HasRows Then
-                            ' Ler a primeira linha retornada
                             dr.Read()
-
-                            ' Preencher as variáveis com os valores retornados
                             EnviarEmailLiberacaoOS = dr("EnviarEmailLiberacaoOS").ToString()
-
-                            RetornaDadosConfiguracao = True
-
-                            '''''MyTaskPanelHost.TimerdgvPlanejamentoProjetista.Enabled = True
+                            Return True
                         Else
                             EnviarEmailLiberacaoOS = ""
-                            RetornaDadosConfiguracao = False
+                            Return False
                         End If
                     End Using
                 End Using
-            Catch ex As Exception
-            Finally
-
-            End Try
-
-
-        End If
-        cl_BancoDados.FecharBanco()
+            Else
+                Return False
+            End If
+        Catch ex As Exception
+            Return False
+        Finally
+            cl_BancoDados.FecharBanco()
+        End Try
 
     End Function
-
 
 End Class

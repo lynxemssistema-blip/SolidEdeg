@@ -1,148 +1,6 @@
-﻿Imports System.Runtime.InteropServices
+Imports System.Runtime.InteropServices
 Imports MySql.Data.MySqlClient
 
-'Module Module1
-
-'    ' 🔹 Conecta ao Solid Edge
-'    ' Public app As SolidEdgeFramework.Application = Marshal.GetActiveObject("SolidEdge.Application")
-
-'    Public app As Object = Marshal.GetActiveObject("SolidEdge.Application")
-
-'    ' Private seApp As SolidEdgeFramework.Application
-
-'    Public cl_BancoDados As New ClBancoDados
-
-'    Public myconect As New MySqlConnection
-
-'    Public mycomand As New MySqlCommand
-
-'    Public conexao As String
-
-
-'    ' Public Protheus As New ClProtheus
-
-'    ' Variável global para guardar a DataTable original
-'    Public tabelaOriginalBOM As DataTable
-
-'    Public DadosArquivoCorrente As New clDadosArquivoCorrente
-
-
-'    Public classePecaManufaturada As New CLPecaManufaturada
-
-'    Public classeMaterial As New clMaterial
-
-
-'    Public MaterialDesenhoCliente As New clMaterialDesenhoCliente
-
-
-'    Public ComplementoTipoBanco As String = ""
-
-'    Public AgentesIA As New ClIA
-
-'    Public BancoCliente As String
-
-
-'    Public NaoMudar As String = ""
-
-'    Public DescarregarLynx As Boolean = True
-
-'    Public ProdutoPrincipal As String
-
-'    Public OrdemServico As New CLOrdemServico
-
-'    Public ProcessosPadrao As New clProcesso
-
-'    Public Usuario As New clUsuario
-
-
-'    Public ContadorBarradeProgresso As Integer
-
-'    Public Projeto As New clProjeto
-
-
-'    Public TagProjeto As New clTag
-
-'    Public OrdemServicoItemPendencia As New CLOrdemServicoItemPendencia
-
-'    Public MaterialFichaTecnica As New CLMaterialFichaTecnica
-
-'    Public colunas() As String
-
-'    Public qtdePecaLm As Double
-
-'    Public InserirNovoTabelas As Boolean = False
-
-
-'    Public NovoIdOrdemServico As String  'Recebe o novo id da nova ordem de serviço
-
-'    ''' <summary>
-'    ''' Public EntradaLogin As New frmLogin
-'    ''' </summary>
-
-
-'    Public dtDesenhos As System.Data.DataTable
-'    Public TabelaViewMontaPeca As System.Data.DataTable
-'    Public TabelaRnc As System.Data.DataTable
-
-'    Public IdMontaPeca As Integer
-
-'    Public TituloPadraoProduto As String
-
-'    Public HoraServidor As String
-
-
-'    Public TemplatesExcel As New ClExcel
-
-
-
-
-
-'    Public pdfsinco As New clPdf ' Trabalhando com arquivos PDF
-
-'    Public DescricaoFinalizacaoPendencia As String
-
-'    Public ExtensaoArquivoCorrente As String
-
-'    Public EnviarEmailLiberacaoOS As String
-
-'    Public TipoLiberacaoOrdemServico As String
-
-'    Public IdMAterial As String
-
-'    Public VCampo0 As String = ""
-'    Public VCampo1 As String = ""
-'    Public VCampo2 As String = ""
-'    Public VCampo3 As String = ""
-'    Public VCampo4 As String = ""
-'    Public VCampo5 As String = ""
-'    Public VCampo6 As String = ""
-'    Public VCampo7 As String = ""
-'    Public VCampo8 As String = ""
-'    Public VCampo9 As String = ""
-'    Public VCampo10 As String = ""
-
-'    Public estatus As Boolean = False
-
-'    Public BloqueaArquivoExistente As Boolean = False
-
-'    Public vemdalista As Boolean = False
-
-'    Public IdEmpresa As String = ""
-'    Public descempresa As String = ""
-
-
-'    Dim dt As New System.Data.DataTable
-'    Dim dtConsolidado As New System.Data.DataTable()
-
-'    Public iconeTipoArquivo As System.Drawing.Image
-'    Public iconeAtencao As System.Drawing.Image
-'    Public iconePDF As System.Drawing.Image
-'    Public iconeDXF As System.Drawing.Image
-'    Public iconeLXDS As System.Drawing.Image
-
-
-
-'End Module
 Module Module1
 
     ' 🔹 Conecta ao Solid Edge apenas quando necessário
@@ -157,13 +15,14 @@ Module Module1
         End Try
     End Function
 
+    ' Conexão e controle de banco de dados
     Public cl_BancoDados As New ClBancoDados
     Public myconect As New MySqlConnection
     Public mycomand As New MySqlCommand
     Public conexao As String
     Public OpenConnectionsCount As Integer = 0
 
-    ' Variáveis e objetos de negócio
+    ' Objetos de negócio e domínio
     Public tabelaOriginalBOM As DataTable
     Public DadosArquivoCorrente As New clDadosArquivoCorrente
     Public classePecaManufaturada As New CLPecaManufaturada
@@ -175,18 +34,14 @@ Module Module1
     Public NaoMudar As String = ""
     Public DescarregarLynx As Boolean = True
     Public ProdutoPrincipal As String
-    Public OrdemServico As New CLOrdemServico
     Public ProcessosPadrao As New clProcesso
     Public Usuario As New clUsuario
     Public ContadorBarradeProgresso As Integer
     Public Projeto As New clProjeto
     Public TagProjeto As New clTag
-    Public OrdemServicoItemPendencia As New CLOrdemServicoItemPendencia
-    Public MaterialFichaTecnica As New CLMaterialFichaTecnica
     Public colunas() As String
     Public qtdePecaLm As Double
     Public InserirNovoTabelas As Boolean = False
-    Public NovoIdOrdemServico As String
 
     ' Tabelas e DataTables globais
     Public dtDesenhos As DataTable
@@ -205,8 +60,6 @@ Module Module1
     ' Campos auxiliares
     Public DescricaoFinalizacaoPendencia As String
     Public ExtensaoArquivoCorrente As String
-    Public EnviarEmailLiberacaoOS As String
-    Public TipoLiberacaoOrdemServico As String
     Public IdMAterial As String
 
     ' Campos globais reutilizáveis

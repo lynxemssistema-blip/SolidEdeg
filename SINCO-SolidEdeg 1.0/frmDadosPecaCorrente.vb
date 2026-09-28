@@ -43,7 +43,7 @@ Public Class frmDadosPecaCorrente
 
 #Region "🔧 VARIÁVEIS GLOBAIS"
 
-    Private WithEvents timerAtualizacao As New System.Windows.Forms.Timer()    ' Controle de ediçao pendente
+    ' timerAtualizacao e dgvBOM já são declarados como Friend WithEvents no Designer.vb
     Private editando As Boolean = False
     Private nomePropriedadeEditando As String = ""
     Private valorEditado As String = ""
@@ -61,7 +61,6 @@ Public Class frmDadosPecaCorrente
     Private dragIndex As Integer
     Private dragRow As DataGridViewRow
     Private dropIndex As Integer
-    Private dgvBOM As System.Windows.Forms.DataGridView = Nothing
     Private executandoLote As Boolean = False
 
 
@@ -475,6 +474,7 @@ Public Class frmDadosPecaCorrente
     Public Sub SetBotoesAtivos(ByVal ativo As Boolean)
         Try
             btnSalvarCadProtheus.Enabled = ativo
+            btnEstruturaProtheus.Enabled = ativo
             btnGerarPdf.Enabled = ativo
             btnAbriDetalhamentoCorrente.Enabled = ativo
             btnListaConjunto.Enabled = ativo
@@ -548,27 +548,19 @@ Public Class frmDadosPecaCorrente
             txtPesoKg.Text = DadosArquivoCorrente.Massa
             txtAreametroquadr.Text = DadosArquivoCorrente.AreaPintura
 
-            Dim connStringProtheus As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
-            Using conn As New Npgsql.NpgsqlConnection(connStringProtheus)
-                conn.Open()
-                Dim sqlBusca As String = "SELECT B1_GRUPO, B1_XREVM, B1_TIPO, B1_UM FROM public.sb1010 WHERE TRIM(B1_COD) = @Codigo"
-                Using cmd As New Npgsql.NpgsqlCommand(sqlBusca, conn)
-                    cmd.Parameters.AddWithValue("@Codigo", NomeArquivo.Trim())
-                    Using reader As Npgsql.NpgsqlDataReader = cmd.ExecuteReader()
-                        If reader.Read() Then
-                            Me.cboB1_GRUPO.Text = If(IsDBNull(reader("B1_GRUPO")), "", reader("B1_GRUPO").ToString().Trim())
-                            Me.txtB1_XREVM.Text = If(IsDBNull(reader("B1_XREVM")), "", reader("B1_XREVM").ToString().Trim())
-                            Me.cboB1_TIPO.Text = If(IsDBNull(reader("B1_TIPO")), "", reader("B1_TIPO").ToString().Trim())
-                            Me.cboB1_UM.Text = If(IsDBNull(reader("B1_UM")), "", reader("B1_UM").ToString().Trim())
-                        Else
-                            Me.cboB1_GRUPO.Text = ""
-                            Me.txtB1_XREVM.Text = ""
-                            Me.cboB1_TIPO.Text = ""
-                            Me.cboB1_UM.Text = ""
-                        End If
-                    End Using
-                End Using
-            End Using
+            ' 1. Determina o código limpo do produto (sem .asm, .par, .psm e sem sufixos residuais como " asm")
+            Dim codCandidatoDoc As String = ObterCodigoProtheusLimpo(txtNumeroDesenho.Text)
+            Dim codCandidatoArq As String = ObterCodigoProtheusLimpo(NomeArquivo)
+            Dim codLimpo As String = If(Not String.IsNullOrEmpty(codCandidatoDoc), codCandidatoDoc, codCandidatoArq)
+
+            If codLimpo.Length <= 15 AndAlso Not String.IsNullOrWhiteSpace(codLimpo) Then
+                txtCodProtheus.Text = codLimpo
+            Else
+                txtCodProtheus.Text = "(NOVO - GERAR AUTOMÁTICO)"
+            End If
+
+            ' Consulta SB1010 no Protheus e bloqueia NCM se já cadastrado
+            ConsultarEAtualizarDadosSB1(codLimpo, codCandidatoDoc, codCandidatoArq)
 
             ' 👇 Sincroniza propriedades customizadas
             SincronizarPropriedadesCustomizadasDoArquivo()
@@ -626,7 +618,13 @@ Public Class frmDadosPecaCorrente
         txtAreametroquadr.Clear()
 
         ' Campos Protheus
+        txtCodProtheus.Clear()
         txtB1_XREVM.Clear()
+        txtB1_XREVC.Clear()
+        txtB1_POSIPI.Clear()
+        txtB1_POSIPI.ReadOnly = False
+        txtB1_POSIPI.BackColor = Color.White
+        txtB1_POSIPI.ForeColor = Color.FromArgb(15, 23, 42)
         cboB1_GRUPO.SelectedIndex = -1
         cboB1_GRUPO.Text = ""
         cboB1_TIPO.SelectedIndex = -1
@@ -634,6 +632,285 @@ Public Class frmDadosPecaCorrente
         cboB1_UM.SelectedIndex = -1
         cboB1_UM.Text = ""
 
+    End Sub
+
+    Private Shared ReadOnly cacheProtheusSB1 As New Dictionary(Of String, Tuple(Of String, String, String, String, String, String))(StringComparer.OrdinalIgnoreCase)
+
+    ''' <summary>
+    ''' Extrai o código puro do Protheus sem diretórios, sem extensões (.asm, .par, .psm) e sem sufixos residuais como " asm"
+    ''' </summary>
+    Public Shared Function ObterCodigoProtheusLimpo(input As String) As String
+        If String.IsNullOrWhiteSpace(input) Then Return ""
+        Dim s As String = input.Trim()
+        If s.Contains("\"c) OrElse s.Contains("/"c) Then
+            s = IO.Path.GetFileNameWithoutExtension(s)
+        End If
+        s = System.Text.RegularExpressions.Regex.Replace(s, "\.(par|psm|asm|prt|dft|dwg|dxf|pdf)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim()
+        s = System.Text.RegularExpressions.Regex.Replace(s, "\s+(par|psm|asm|prt|dft)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim()
+        Return s.Trim(" "c, """"c, "'"c).ToUpper()
+    End Function
+
+    ''' <summary>
+    ''' Ajusta o nome/código do desenho para caber no limite do campo Protheus (B1_XCODDES),
+    ''' aplicando abreviações inteligentes de termos comuns de engenharia mecânica.
+    ''' </summary>
+    Public Shared Function AbreviarTextoParaTamanhoLimite(textoOriginal As String, Optional limiteCaracteres As Integer = 30) As String
+        If String.IsNullOrWhiteSpace(textoOriginal) Then Return ""
+        Dim texto As String = textoOriginal.Trim()
+        If texto.Length <= limiteCaracteres Then Return texto
+
+        ' Dicionário de abreviações técnicas comuns em projetos mecânicos
+        Dim abreviacoes As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase) From {
+            {"INFERIOR", "INF"},
+            {"SUPERIOR", "SUP"},
+            {"DIREITO", "DIR"},
+            {"DIREITA", "DIR"},
+            {"ESQUERDO", "ESQ"},
+            {"ESQUERDA", "ESQ"},
+            {"CENTRAL", "CENT"},
+            {"CONJUNTO", "CJ"},
+            {"SUPORTE", "SUP"},
+            {"CANHAO", "CANH"},
+            {"CANHÃO", "CANH"},
+            {"DISPOSITIVO", "DISP"},
+            {"DISPOSITIVOS", "DISP"},
+            {"FIXACAO", "FIX"},
+            {"FIXAÇÃO", "FIX"},
+            {"LATERAL", "LAT"},
+            {"TRASEIRO", "TRAS"},
+            {"TRASEIRA", "TRAS"},
+            {"DIANTEIRO", "DIANT"},
+            {"DIANTEIRA", "DIANT"},
+            {"INTERMEDIARIO", "INTERM"},
+            {"INTERMEDIARIA", "INTERM"},
+            {"ESTRUTURA", "ESTR"},
+            {"ARTICULACAO", "ARTIC"},
+            {"ARTICULAÇÃO", "ARTIC"},
+            {"REFORCO", "REF"},
+            {"REFORÇO", "REF"},
+            {"PROTECAO", "PROT"},
+            {"PROTEÇÃO", "PROT"},
+            {"PARAFUSO", "PARAF"},
+            {"ARRUELA", "ARR"},
+            {"CILINDRO", "CIL"},
+            {"COMPLETO", "CPL"},
+            {"COMPLETA", "CPL"},
+            {"ALONGAMENTO", "ALONG"},
+            {"MONTANTE", "MONT"},
+            {"DISTANCIADOR", "DIST"}
+        }
+
+        ' 1. Primeiro remove palavras vazias / conectores irrelevantes ("DO", "DA", "DE", "DOS", "DAS", "PARA", "COM")
+        Dim tokens = texto.Split({" "c, "_"c, "-"c}, StringSplitOptions.RemoveEmptyEntries).ToList()
+        Dim tokensFiltrados As New List(Of String)()
+        For Each tok In tokens
+            Dim tokUpper = tok.ToUpper()
+            If tokUpper <> "DE" AndAlso tokUpper <> "DO" AndAlso tokUpper <> "DA" AndAlso
+               tokUpper <> "DOS" AndAlso tokUpper <> "DAS" AndAlso tokUpper <> "PARA" AndAlso tokUpper <> "P/" AndAlso tokUpper <> "E" Then
+                tokensFiltrados.Add(tok)
+            End If
+        Next
+
+        Dim resultado As String = String.Join(" ", tokensFiltrados)
+        If resultado.Length <= limiteCaracteres Then Return resultado
+
+        ' 2. Aplica as abreviações técnicas palavra por palavra
+        For i As Integer = 0 To tokensFiltrados.Count - 1
+            Dim t = tokensFiltrados(i)
+            If abreviacoes.ContainsKey(t) Then
+                tokensFiltrados(i) = abreviacoes(t)
+            End If
+            resultado = String.Join(" ", tokensFiltrados)
+            If resultado.Length <= limiteCaracteres Then Return resultado
+        Next
+
+        ' 3. Se ainda exceder, remove espaços intermediários
+        resultado = String.Join("", tokensFiltrados)
+        If resultado.Length <= limiteCaracteres Then Return resultado
+
+        ' 4. Corte final seguro garantindo que nunca ultrapasse o limite
+        Return resultado.Substring(0, Math.Min(resultado.Length, limiteCaracteres))
+    End Function
+
+    ''' <summary>
+    ''' Converte texto numérico de forma ultra segura para Double, suportando tanto formato brasileiro quanto americano
+    ''' </summary>
+    Public Shared Function ConverterParaDecimalSeguro(valorTexto As String) As Double
+        If String.IsNullOrWhiteSpace(valorTexto) Then Return 0.0
+        Dim s As String = valorTexto.Trim()
+        s = System.Text.RegularExpressions.Regex.Replace(s, "(?i)[^\d,\.\-]", "")
+        If String.IsNullOrEmpty(s) Then Return 0.0
+
+        If s.Contains("."c) AndAlso s.Contains(","c) Then
+            Dim lastDot = s.LastIndexOf("."c)
+            Dim lastComma = s.LastIndexOf(","c)
+            If lastComma > lastDot Then
+                s = s.Replace(".", "").Replace(",", ".")
+            Else
+                s = s.Replace(",", "")
+            End If
+        ElseIf s.Contains(","c) Then
+            s = s.Replace(",", ".")
+        End If
+
+        Dim res As Double = 0.0
+        Double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, res)
+        Return res
+    End Function
+
+    ''' <summary>
+    ''' Quando o número do desenho mudar, apenas revalida se não houver código Protheus fixado
+    ''' </summary>
+    Private Sub txtNumeroDesenho_TextChanged(sender As Object, e As EventArgs) Handles txtNumeroDesenho.TextChanged
+        ' O nome do desenho NÃO deve ser copiado diretamente para o código Protheus se exceder 15 caracteres
+        Dim limpo As String = ObterCodigoProtheusLimpo(txtNumeroDesenho.Text)
+        If String.IsNullOrEmpty(txtCodProtheus.Text) OrElse txtCodProtheus.Text.StartsWith("(NOVO") Then
+            If limpo.Length <= 15 AndAlso Not String.IsNullOrWhiteSpace(limpo) Then
+                txtCodProtheus.Text = limpo
+            Else
+                txtCodProtheus.Text = "(NOVO - GERAR AUTOMÁTICO)"
+            End If
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Ao sair do campo de desenho, revalida automaticamente no Protheus SB1010 e bloqueia/desbloqueia o NCM
+    ''' </summary>
+    Private Sub txtNumeroDesenho_Leave(sender As Object, e As EventArgs) Handles txtNumeroDesenho.Leave
+        Dim limpo As String = ObterCodigoProtheusLimpo(txtNumeroDesenho.Text)
+        If Not String.IsNullOrEmpty(limpo) Then
+            ConsultarEAtualizarDadosSB1(limpo, limpo, limpo)
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Consulta a tabela SB1010 do Protheus. Se o produto existir, bloqueia o campo NCM e carrega suas propriedades; se for novo, libera o NCM.
+    ''' </summary>
+    Public Sub ConsultarEAtualizarDadosSB1(codLimpo As String, Optional codCandidatoDoc As String = "", Optional codCandidatoArq As String = "")
+        If String.IsNullOrWhiteSpace(codLimpo) Then Exit Sub
+
+        Dim dadosSB1 As Tuple(Of String, String, String, String, String, String) = Nothing
+
+        If cacheProtheusSB1.TryGetValue(codLimpo, dadosSB1) Then
+            Me.cboB1_GRUPO.Text = dadosSB1.Item1
+            Me.txtB1_XREVM.Text = dadosSB1.Item2
+            Me.cboB1_TIPO.Text = dadosSB1.Item3
+            Me.cboB1_UM.Text = dadosSB1.Item4
+            Me.txtB1_XREVC.Text = dadosSB1.Item5
+            Dim ncmCache As String = dadosSB1.Item6
+            Dim ncmCacheLimpo As String = If(ncmCache, "").Replace("."c, "").Replace("-"c, "").Trim()
+            Dim temNCMValidoCache As Boolean = Not String.IsNullOrEmpty(ncmCacheLimpo) AndAlso 
+                                               ncmCacheLimpo <> "00000000" AndAlso 
+                                               ncmCacheLimpo.Replace("0"c, "").Length > 0 AndAlso 
+                                               ncmCacheLimpo.Length >= 8
+
+            If temNCMValidoCache Then
+                Me.txtB1_POSIPI.Text = ncmCache
+                Me.txtB1_POSIPI.ReadOnly = True
+                Me.txtB1_POSIPI.BackColor = Color.FromArgb(241, 245, 249)
+                Me.txtB1_POSIPI.ForeColor = Color.FromArgb(51, 65, 85)
+            Else
+                Me.txtB1_POSIPI.Text = If(Not String.IsNullOrEmpty(ncmCache) AndAlso ncmCache <> "00000000", ncmCache, "")
+                Me.txtB1_POSIPI.ReadOnly = False
+                Me.txtB1_POSIPI.BackColor = Color.White
+                Me.txtB1_POSIPI.ForeColor = Color.FromArgb(15, 23, 42)
+            End If
+        Else
+            Dim connStringProtheus As String = "Host=192.168.1.61;Port=5432;Username=sinco2;Password=sinco25;Database=p12prd;"
+            Using conn As New Npgsql.NpgsqlConnection(connStringProtheus)
+                conn.Open()
+                Dim codDesAbrev As String = AbreviarTextoParaTamanhoLimite(codLimpo, 30)
+                Dim sqlBusca As String = "SELECT B1_COD, B1_GRUPO, B1_XREVM, B1_XREVC, B1_POSIPI, B1_TIPO, B1_UM FROM public.sb1010 " &
+                                         "WHERE (TRIM(B1_COD) = @CodDoc OR TRIM(B1_COD) = @CodDocPadded " &
+                                         "   OR TRIM(B1_COD) = @CodArq OR TRIM(B1_COD) = @CodArqPadded " &
+                                         "   OR TRIM(B1_COD) = @CodLimpo OR TRIM(B1_COD) = @CodLimpoPadded " &
+                                         "   OR TRIM(B1_XCODDES) = @CodLimpo OR TRIM(B1_XCODDES) = @CodDesAbrev) " &
+                                         "  AND COALESCE(d_e_l_e_t_, '') NOT IN ('*', '  *') LIMIT 1;"
+                Using cmd As New Npgsql.NpgsqlCommand(sqlBusca, conn)
+                    cmd.Parameters.AddWithValue("@CodDoc", If(String.IsNullOrEmpty(codCandidatoDoc), codLimpo, codCandidatoDoc))
+                    cmd.Parameters.AddWithValue("@CodDocPadded", If(String.IsNullOrEmpty(codCandidatoDoc), codLimpo, codCandidatoDoc).PadRight(15, " "c))
+                    cmd.Parameters.AddWithValue("@CodArq", If(String.IsNullOrEmpty(codCandidatoArq), codLimpo, codCandidatoArq))
+                    cmd.Parameters.AddWithValue("@CodArqPadded", If(String.IsNullOrEmpty(codCandidatoArq), codLimpo, codCandidatoArq).PadRight(15, " "c))
+                    cmd.Parameters.AddWithValue("@CodLimpo", codLimpo)
+                    cmd.Parameters.AddWithValue("@CodLimpoPadded", codLimpo.PadRight(15, " "c))
+                    cmd.Parameters.AddWithValue("@CodDesAbrev", codDesAbrev)
+                    Using reader As Npgsql.NpgsqlDataReader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            Dim b1CodEncontrado As String = reader("B1_COD").ToString().Trim()
+                            txtCodProtheus.Text = b1CodEncontrado
+
+                            Dim grp = If(IsDBNull(reader("B1_GRUPO")), "", reader("B1_GRUPO").ToString().Trim())
+                            Dim rev = If(IsDBNull(reader("B1_XREVM")), "", reader("B1_XREVM").ToString().Trim())
+                            Dim revC = If(IsDBNull(reader("B1_XREVC")), "", reader("B1_XREVC").ToString().Trim())
+                            Dim ncm = If(IsDBNull(reader("B1_POSIPI")), "", reader("B1_POSIPI").ToString().Trim())
+                            Dim tip = If(IsDBNull(reader("B1_TIPO")), "", reader("B1_TIPO").ToString().Trim())
+                            Dim um = If(IsDBNull(reader("B1_UM")), "", reader("B1_UM").ToString().Trim())
+
+                            If String.IsNullOrEmpty(revC) Then
+                                Try
+                                    Using connCli As New Npgsql.NpgsqlConnection(connStringProtheus)
+                                        connCli.Open()
+                                        Dim sqlRevC As String = "SELECT z1_revisao FROM public.sz1010 WHERE TRIM(z1_produto) = @Codigo AND COALESCE(d_e_l_e_t_, '') = ' ' LIMIT 1;"
+                                        Using cmdCli As New Npgsql.NpgsqlCommand(sqlRevC, connCli)
+                                            cmdCli.Parameters.AddWithValue("@Codigo", b1CodEncontrado)
+                                            Dim cliRevObj = cmdCli.ExecuteScalar()
+                                            If cliRevObj IsNot Nothing AndAlso Not IsDBNull(cliRevObj) Then
+                                                revC = cliRevObj.ToString().Trim()
+                                            End If
+                                        End Using
+                                    End Using
+                                Catch
+                                End Try
+                            End If
+
+                            Me.cboB1_GRUPO.Text = grp
+                            Me.txtB1_XREVM.Text = If(Not String.IsNullOrEmpty(rev), rev, "00")
+                            Me.txtB1_XREVC.Text = revC
+                            Me.cboB1_TIPO.Text = tip
+                            Me.cboB1_UM.Text = um
+
+                            Dim ncmLimpoValidacao As String = ncm.Replace("."c, "").Replace("-"c, "").Trim()
+                            Dim temNCMValidoNoBanco As Boolean = Not String.IsNullOrEmpty(ncmLimpoValidacao) AndAlso 
+                                                                 ncmLimpoValidacao <> "00000000" AndAlso 
+                                                                 ncmLimpoValidacao.Replace("0"c, "").Length > 0 AndAlso 
+                                                                 ncmLimpoValidacao.Length >= 8
+
+                            If temNCMValidoNoBanco Then
+                                Me.txtB1_POSIPI.Text = ncm
+                                Me.txtB1_POSIPI.ReadOnly = True
+                                Me.txtB1_POSIPI.BackColor = Color.FromArgb(241, 245, 249)
+                                Me.txtB1_POSIPI.ForeColor = Color.FromArgb(51, 65, 85)
+                            Else
+                                Me.txtB1_POSIPI.Text = If(Not String.IsNullOrEmpty(ncm) AndAlso ncm <> "00000000", ncm, "")
+                                Me.txtB1_POSIPI.ReadOnly = False
+                                Me.txtB1_POSIPI.BackColor = Color.White
+                                Me.txtB1_POSIPI.ForeColor = Color.FromArgb(15, 23, 42)
+                            End If
+
+                            cacheProtheusSB1(b1CodEncontrado) = Tuple.Create(grp, rev, tip, um, revC, If(temNCMValidoNoBanco, ncm, ""))
+                            If codLimpo <> b1CodEncontrado Then
+                                cacheProtheusSB1(codLimpo) = Tuple.Create(grp, rev, tip, um, revC, If(temNCMValidoNoBanco, ncm, ""))
+                            End If
+                        Else
+                            ' PRODUTO NAO EXISTE NO BANCO -> CAMPO NCM FICA HABILITADO PARA EDICAO
+                            Me.txtCodProtheus.Text = "(NOVO - GERAR AUTOMÁTICO)"
+                            Me.cboB1_GRUPO.Text = ""
+                            Me.txtB1_XREVM.Text = "00"
+                            Me.txtB1_XREVC.Text = ""
+                            Me.txtB1_POSIPI.Text = ""
+                            Me.cboB1_TIPO.Text = ""
+                            Me.cboB1_UM.Text = ""
+
+                            Me.txtB1_POSIPI.ReadOnly = False
+                            Me.txtB1_POSIPI.BackColor = Color.White
+                            Me.txtB1_POSIPI.ForeColor = Color.FromArgb(15, 23, 42)
+
+                            cacheProtheusSB1(codLimpo) = Tuple.Create("", "00", "", "", "", "")
+                        End If
+                    End Using
+                End Using
+            End Using
+        End If
     End Sub
 
     Public Sub ListarTodasPropriedadesDoArquivo(txtDestino As TextBox)
@@ -824,19 +1101,14 @@ Public Class frmDadosPecaCorrente
         SalvarPropriedadeAlterada(txtB1_XREVM.Tag, txtB1_XREVM.Text.ToUpper)
     End Sub
 
-    Private Sub btnConfiguracoes_Click(sender As Object, e As EventArgs)
+    ' Obsolento / controles removidos
+    ' Private Sub btnConfiguracoes_Click(sender As Object, e As EventArgs)
+    '     cl_BancoDados.BuscarArquivoconf()
+    ' End Sub
 
-        cl_BancoDados.BuscarArquivoconf()
-
-
-    End Sub
-
-    Private Sub txtPesqProcesso_TextChanged(sender As Object, e As EventArgs)
-
-
-        TimerdgvProcesso.Enabled = True
-
-    End Sub
+    ' Private Sub txtPesqProcesso_TextChanged(sender As Object, e As EventArgs)
+    '     TimerdgvProcesso.Enabled = True
+    ' End Sub
 
     Public Sub AtivarVariaveisESincronizarPropriedades(Optional valorBloqueado As String = Nothing, Optional silencioso As Boolean = True)
         Try
@@ -1793,7 +2065,7 @@ Public Class frmDadosPecaCorrente
             DadosArquivoCorrente.AssuntoSubiTitulo = txtTitulo.Text
 
 
-            Dim limpo As String
+            Dim limpo As String = ""
 
             ' [REMOVED] limpo = LimparUnidades(dgvDadosPdf.Rows(5).Cells("dgvDadosSelecionado").Value).ToString.ToUpper.Trim
             DadosArquivoCorrente.Massa = limpo
@@ -1911,105 +2183,189 @@ Public Class frmDadosPecaCorrente
     Private Sub btnSalvarCadProtheus_Click(sender As Object, e As EventArgs) Handles btnSalvarCadProtheus.Click
 
         ' ============================================================
-        ' 🔹 Integração API Protheus via Node.js Middleware
+        ' 🔹 Integração API Protheus (Criar ou Atualizar Produto SB1010)
         ' ============================================================
 
         ' 1. CONFIGURAÇÃO VISUAL INICIAL
         ProgressBar1.Style = ProgressBarStyle.Continuous
         ProgressBar1.Visible = True
-        ProgressBar1.Value = 10  ' Dá o start visual
+        ProgressBar1.Value = 10
         Me.Cursor = Cursors.WaitCursor
         System.Windows.Forms.Application.DoEvents()
 
         Try
-            ' Montar payload simplificado para enviar ao Node.js
-            Dim tituloLimpo As String = UCase(DadosArquivoCorrente.Titulo).Trim()
-            Dim codDesenho As String = DadosArquivoCorrente.NomeArquivoSemExtensao.Replace(".PSM", "").Replace(".PAR", "").Replace(".PRT", "").Replace(".ASM", "").Replace(".psm", "").Replace(".par", "").Replace(".prt", "").Replace(".asm", "")
-            If String.IsNullOrEmpty(codDesenho) Then codDesenho = "desenho_metalfisa"
-            Dim codigoSeguro As String = If(String.IsNullOrEmpty(codDesenho), "SEM_COD", codDesenho.ToUpper())
+            System.Net.ServicePointManager.SecurityProtocol = DirectCast(3072, System.Net.SecurityProtocolType) Or System.Net.SecurityProtocolType.Tls11 Or System.Net.SecurityProtocolType.Tls
+            System.Net.ServicePointManager.ServerCertificateValidationCallback = Function(s, cert, chain, sslPolicyErrors) True
 
-            Dim valGrupo As String = If(cboB1_GRUPO.SelectedValue IsNot Nothing, cboB1_GRUPO.SelectedValue.ToString(), cboB1_GRUPO.Text)
-            valGrupo = If(String.IsNullOrWhiteSpace(valGrupo), "", valGrupo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+            ProgressBar1.Value = 25
+            System.Windows.Forms.Application.DoEvents()
 
-            Dim valTipo As String = If(cboB1_TIPO.SelectedValue IsNot Nothing, cboB1_TIPO.SelectedValue.ToString(), cboB1_TIPO.Text)
-            valTipo = If(String.IsNullOrWhiteSpace(valTipo), "", valTipo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+            ' 1. Obter Token Bearer
+            Dim tokenUrl As String = "https://192.168.1.60:47500/tlpp/oauth2/token?grant_type=password&username=sinco&password=Metal1120"
+            Dim tokenRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(tokenUrl), System.Net.HttpWebRequest)
+            tokenRequest.Method = "GET"
+            tokenRequest.Timeout = 15000
 
-            Dim valUM As String = If(cboB1_UM.SelectedValue IsNot Nothing, cboB1_UM.SelectedValue.ToString(), cboB1_UM.Text)
-            valUM = If(String.IsNullOrWhiteSpace(valUM), "", valUM.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
-
-            ' Validações padrão
-            If valGrupo.ToString = "" Or valTipo.ToString = "" Or valUM.ToString = "" Then
-                MsgBox("Os campos de Tipo, Unidade e Grupo são de preenchimento Obrigatório.", vbInformation)
-                Exit Sub
-            End If
-            If tituloLimpo.ToString = "" Then
-                MsgBox("O Titulo do desenho é de preenchimento Obrigatório", MsgBoxStyle.Exclamation, "Atenção")
-                Exit Sub
-            End If
+            Dim accessToken As String = ""
+            Using tokenResponse As System.Net.HttpWebResponse = CType(tokenRequest.GetResponse(), System.Net.HttpWebResponse)
+                Using reader As New System.IO.StreamReader(tokenResponse.GetResponseStream())
+                    Dim responseText As String = reader.ReadToEnd()
+                    Dim match As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(responseText, """access_token""\s*:\s*""([^""]+)""")
+                    If match.Success Then
+                        accessToken = match.Groups(1).Value
+                    End If
+                End Using
+            End Using
 
             ProgressBar1.Value = 50
             System.Windows.Forms.Application.DoEvents()
 
+            If Not String.IsNullOrEmpty(accessToken) Then
+                ' 1. Determinação de Código do Produto (B1_COD) vs Código do Desenho (B1_XCODDES)
+                Dim codProtheusInformado As String = ObterCodigoProtheusLimpo(txtCodProtheus.Text)
+                Dim codDesenhoOriginal As String = ObterCodigoProtheusLimpo(txtNumeroDesenho.Text)
+                If String.IsNullOrEmpty(codDesenhoOriginal) Then codDesenhoOriginal = "SEM_DESENHO"
 
-            ' ============================================================
-            ' BLOCO COMENTADO DEVIDO A ERROS DE SINTAXE (Falta de Using/If)
-            ' ============================================================
-            ' Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
-            '     Dim responseResult As String = reader.ReadToEnd()
-            ' 
-            '     System.Diagnostics.Debug.WriteLine("SINCO: Produto tratado na API Protheus. Resposta: " & responseResult)
-            ' 
-            '     ' Supondo que responseResult venha da API Protheus
-            '     Dim chapaCodigoProtheus As String = ""
-            '     Dim novoOu As String = ""
-            ' 
-            '     ' 1. Extrair o conteúdo entre as chaves { }
-            '     Dim matchCodigo = Regex.Match(responseResult, "(?<=\{)[^}]+(?=\})")
-            '     If matchCodigo.Success Then
-            '         chapaCodigoProtheus = matchCodigo.Value
-            '     End If
-            ' 
-            '     ' 2. Lógica para identificar se foi Criado ou Alterado
-            '     If responseResult.ToLower().Contains("criado") Then
-            '         novoOu = "criado"
-            '     ElseIf responseResult.ToLower().Contains("atualizado") Then
-            '         novoOu = "Alterado"
-            '     End If
-            ' 
-            '     ' Log de conferência
-            '     '   System.Diagnostics.Debug.WriteLine("Chapa Código: " & chapaCodigoProtheus)
-            '     '  System.Diagnostics.Debug.WriteLine("Status Operação: " & novoOu)
-            ' 
-            '     If novoOu = "criado" Then
-            '         MsgBox("Produto Novo, o seu arquivo corrente deve ser renomeado para: " & chapaCodigoProtheus, vbInformation, "Novo Produto!!")
-            '     Else
-            '         EnviarSINCOWeb(matchCodigo.Value.ToString)
-            '     End If
-            ' 
-            ' End Using
-            ' 
-            ' End Using
-            ' 
-            ' Else
-            '     System.Diagnostics.Debug.WriteLine("SINCO: Falha ao obter token de acesso na API Protheus.")
-            ' End If
+                ' Abreviar o nome do desenho caso exceda o limite do campo B1_XCODDES (máx 30 caracteres)
+                Dim codDesenhoAbreviado As String = AbreviarTextoParaTamanhoLimite(codDesenhoOriginal, 30)
+
+                Dim codProdutoFinal As String = ""
+                Dim isProdutoNovo As Boolean = False
+
+                If String.IsNullOrEmpty(codProtheusInformado) OrElse 
+                   codProtheusInformado.StartsWith("(NOVO") OrElse 
+                   codProtheusInformado.Length > 15 Then
+                    ' Produto Novo: B1_COD vai vazio para o Protheus gerar automaticamente
+                    codProdutoFinal = ""
+                    isProdutoNovo = True
+                Else
+                    codProdutoFinal = codProtheusInformado
+                End If
+
+                Dim tituloLimpo As String = If(txtTitulo.Text, "").Trim()
+                If String.IsNullOrEmpty(tituloLimpo) Then
+                    MsgBox("O Título do desenho é de preenchimento Obrigatório", MsgBoxStyle.Exclamation, "Atenção")
+                    Exit Sub
+                End If
+                If tituloLimpo.Length > 60 Then tituloLimpo = tituloLimpo.Substring(0, 60)
+
+                Dim valGrupo As String = If(cboB1_GRUPO.SelectedValue IsNot Nothing, cboB1_GRUPO.SelectedValue.ToString(), cboB1_GRUPO.Text)
+                valGrupo = If(String.IsNullOrWhiteSpace(valGrupo), "", valGrupo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+                Dim valTipo As String = If(cboB1_TIPO.SelectedValue IsNot Nothing, cboB1_TIPO.SelectedValue.ToString(), cboB1_TIPO.Text)
+                valTipo = If(String.IsNullOrWhiteSpace(valTipo), "", valTipo.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+                Dim valUM As String = If(cboB1_UM.SelectedValue IsNot Nothing, cboB1_UM.SelectedValue.ToString(), cboB1_UM.Text)
+                valUM = If(String.IsNullOrWhiteSpace(valUM), "", valUM.Split({"-"c, " "c}, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
+
+                If String.IsNullOrEmpty(valGrupo) OrElse String.IsNullOrEmpty(valTipo) OrElse String.IsNullOrEmpty(valUM) Then
+                    MsgBox("Os campos de Tipo, Unidade e Grupo são de preenchimento Obrigatório.", vbInformation)
+                    Exit Sub
+                End If
+
+                ' Validação do NCM
+                Dim ncmLimpo As String = txtB1_POSIPI.Text.Trim().Replace(".", "").Replace("-", "")
+                If Not txtB1_POSIPI.ReadOnly AndAlso (String.IsNullOrEmpty(ncmLimpo) OrElse ncmLimpo.Length < 8) Then
+                    If String.IsNullOrEmpty(ncmLimpo) Then ncmLimpo = "00000000"
+                    If ncmLimpo.Length < 8 Then
+                        MsgBox("O NCM (Classificação Fiscal) deve conter pelo menos 8 dígitos numéricos.", MsgBoxStyle.Exclamation, "NCM Inválido")
+                        Exit Sub
+                    End If
+                End If
+
+                ProgressBar1.Value = 75
+                System.Windows.Forms.Application.DoEvents()
+
+                ' Conversão segura de valores numéricos
+                Dim numPeso As Double = ConverterParaDecimalSeguro(txtPesoKg.Text)
+                Dim numComp As Double = ConverterParaDecimalSeguro(txtCutSizex.Text)
+                Dim numLarg As Double = ConverterParaDecimalSeguro(txtCutSizey.Text)
+                Dim numEsp As Double = ConverterParaDecimalSeguro(txtEspessura.Text)
+
+                ' Construção robusta com JObject
+                Dim payloadObj As New Newtonsoft.Json.Linq.JObject()
+                payloadObj("b1_cod") = codProdutoFinal
+                payloadObj("b1_desc") = tituloLimpo
+                payloadObj("b1_tipo") = valTipo
+                payloadObj("b1_um") = valUM
+                payloadObj("b1_grupo") = valGrupo
+                payloadObj("b1_peso") = numPeso
+                payloadObj("b1_xblkc") = numComp
+                payloadObj("b1_xblkl") = numLarg
+                payloadObj("b1_xesp") = numEsp
+                payloadObj("b1_xrevm") = If(String.IsNullOrEmpty(txtB1_XREVM.Text), "00", txtB1_XREVM.Text.Trim())
+                payloadObj("b1_xrevc") = txtB1_XREVC.Text.Trim()
+                payloadObj("b1_posipi") = ncmLimpo
+                payloadObj("b1_xcoddes") = codDesenhoAbreviado
+
+                Dim jsonPayload As String = payloadObj.ToString(Newtonsoft.Json.Formatting.None)
+
+                Dim postUrl As String = "https://192.168.1.60:47500/produtos/create"
+                Dim postRequest As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+                postRequest.Method = "POST"
+                postRequest.ContentType = "application/json"
+                postRequest.Headers.Add("Authorization", "Bearer " & accessToken)
+                postRequest.Timeout = 25000
+
+                Using writer As New System.IO.StreamWriter(postRequest.GetRequestStream())
+                    writer.Write(jsonPayload)
+                End Using
+
+                Using postResponse As System.Net.HttpWebResponse = CType(postRequest.GetResponse(), System.Net.HttpWebResponse)
+                    Using reader As New System.IO.StreamReader(postResponse.GetResponseStream())
+                        Dim responseResult As String = reader.ReadToEnd()
+
+                        ' Tenta extrair código retornado pelo Protheus (seja JSON estruturado ou formato textual)
+                        Dim codigoConfirmado As String = ""
+                        Dim matchCodigo = System.Text.RegularExpressions.Regex.Match(responseResult, "(?<=\{)[^}]+(?=\})")
+                        If matchCodigo.Success Then
+                            codigoConfirmado = matchCodigo.Value.Trim()
+                        End If
+
+                        If String.IsNullOrEmpty(codigoConfirmado) Then
+                            Dim matchJsonCod = System.Text.RegularExpressions.Regex.Match(responseResult, """(?:b1_cod|codigo|code)""\s*:\s*""([^""]+)""", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                            If matchJsonCod.Success Then
+                                codigoConfirmado = matchJsonCod.Groups(1).Value.Trim()
+                            End If
+                        End If
+
+                        If String.IsNullOrEmpty(codigoConfirmado) Then
+                            codigoConfirmado = If(Not String.IsNullOrEmpty(codProdutoFinal), codProdutoFinal, codDesenhoAbreviado)
+                        End If
+
+                        If responseResult.ToLower().Contains("criado") OrElse isProdutoNovo Then
+                            MsgBox("Produto cadastrado com sucesso no Protheus!" & vbCrLf & vbCrLf &
+                                   "Código Protheus: " & codigoConfirmado & vbCrLf &
+                                   "Desenho (B1_XCODDES): " & codDesenhoAbreviado, vbInformation, "Novo Produto")
+                        Else
+                            MsgBox("Produto atualizado com sucesso no Protheus: " & codigoConfirmado, vbInformation, "Produto Atualizado")
+                        End If
+
+                        ' Atualiza cache local e interface
+                        cacheProtheusSB1(codigoConfirmado) = Tuple.Create(valGrupo, txtB1_XREVM.Text, valTipo, valUM, txtB1_XREVC.Text, ncmLimpo)
+                        txtCodProtheus.Text = codigoConfirmado
+
+                        ' Sincroniza propriedades do arquivo CAD ativo se aberto
+                        SincronizarPropriedadesCustomizadasDoArquivo()
+                    End Using
+                End Using
+            Else
+                MsgBox("Falha ao obter token de acesso na API Protheus.", MsgBoxStyle.Critical, "Autenticação Protheus")
+            End If
 
         Catch exAPI As System.Net.WebException
             Dim erroDetalhado As String = exAPI.Message
             If exAPI.Response IsNot Nothing Then
                 Try
                     Using reader As New System.IO.StreamReader(exAPI.Response.GetResponseStream())
-                        Dim respText As String = reader.ReadToEnd()
-                        erroDetalhado &= vbCrLf & "Detalhes do Servidor: " & respText
+                        erroDetalhado &= vbCrLf & "Detalhes do Servidor: " & reader.ReadToEnd()
                     End Using
                 Catch
                 End Try
             End If
-            System.Diagnostics.Debug.WriteLine("SINCO: Erro WebException Protheus -> " & erroDetalhado)
             MsgBox("SINCO: Erro na integração com a API Protheus -> " & erroDetalhado, MsgBoxStyle.Critical, "Erro de API")
 
         Catch exAPI As Exception
-            System.Diagnostics.Debug.WriteLine("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message)
             MsgBox("SINCO: Erro na integração com a API Protheus -> " & exAPI.Message, MsgBoxStyle.Critical, "Erro de API")
 
         Finally
@@ -2018,6 +2374,56 @@ Public Class frmDadosPecaCorrente
             ProgressBar1.Visible = False
         End Try
 
+    End Sub
+
+    ''' <summary>
+    ''' Abre o formulário para montagem e manutenção da Estrutura do Produto (Protheus SG1010)
+    ''' </summary>
+    Private Sub btnEstruturaProtheus_Click(sender As Object, e As EventArgs) Handles btnEstruturaProtheus.Click
+        Try
+            Dim codProduto As String = ""
+            Dim tituloProduto As String = If(txtTitulo.Text, "").Trim()
+
+            If Not String.IsNullOrEmpty(txtCodProtheus.Text) Then
+                codProduto = ObterCodigoProtheusLimpo(txtCodProtheus.Text)
+            End If
+
+            If String.IsNullOrEmpty(codProduto) AndAlso Not String.IsNullOrEmpty(txtNumeroDesenho.Text) Then
+                codProduto = ObterCodigoProtheusLimpo(txtNumeroDesenho.Text)
+            End If
+
+            If String.IsNullOrEmpty(codProduto) Then
+                Try
+                    If app IsNot Nothing AndAlso app.Documents.Count > 0 AndAlso app.ActiveDocument IsNot Nothing Then
+                        codProduto = ObterCodigoProtheusLimpo(app.ActiveDocument.FullName)
+                    End If
+                Catch
+                End Try
+            End If
+
+            If String.IsNullOrEmpty(codProduto) AndAlso Not String.IsNullOrEmpty(DadosArquivoCorrente.EnderecoArquivo) Then
+                codProduto = ObterCodigoProtheusLimpo(DadosArquivoCorrente.EnderecoArquivo)
+            End If
+
+            If String.IsNullOrEmpty(codProduto) AndAlso Not String.IsNullOrEmpty(txtendereco.Text) Then
+                codProduto = ObterCodigoProtheusLimpo(txtendereco.Text)
+            End If
+
+            Dim docCAD As Object = Nothing
+            Try
+                If app IsNot Nothing AndAlso app.Documents.Count > 0 Then
+                    docCAD = app.ActiveDocument
+                End If
+            Catch
+            End Try
+
+            Using frm As New frmEstruturaProduto(codProduto, tituloProduto, docCAD)
+                frm.ShowDialog(Me)
+            End Using
+
+        Catch ex As Exception
+            MessageBox.Show("Erro ao abrir a tela de Estrutura do Produto: " & ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     Private Sub btnAbriDetalhamentoCorrente_Click(sender As Object, e As EventArgs) Handles btnAbriDetalhamentoCorrente.Click
@@ -2046,48 +2452,42 @@ Public Class frmDadosPecaCorrente
                 ' ═══════════════════════════════════════════════════════════
                 ExibirGridBOM(Nothing)
 
-                ' Posiciona o label de status e barra de progresso (visíveis no grid)
-                Dim labelStatus As New Label()
                 Try
-                    labelStatus.AutoSize = True
-                    labelStatus.Location = New System.Drawing.Point(ProgressBar1.Left, ProgressBar1.Top - 22)
-                    labelStatus.ForeColor = System.Drawing.Color.FromArgb(31, 54, 92)
-                    labelStatus.Font = New System.Drawing.Font("Segoe UI", 9.0!, System.Drawing.FontStyle.Bold)
-                    Me.Controls.Add(labelStatus)
-                    labelStatus.BringToFront()
-
-                    ProgressBar1.Value = 0
+                    pnlStatus.Visible = True
+                    pnlStatus.BringToFront()
+                    lblStatusOperacao.Visible = True
+                    lblStatusOperacao.Text = "Lendo estrutura CAD... aguarde."
                     ProgressBar1.Visible = True
-                    ProgressBar1.BringToFront()
+                    ProgressBar1.Value = 0
                     System.Windows.Forms.Application.DoEvents()
 
                     ' ═══════════════════════════════════════════════════════════
-                    ' PASSO 2: Ler BOM diretamente no dgvBOM visível
-                    '          Linhas vão aparecendo em tempo real
+                    ' PASSO 2: Ler BOM (estrutura pura em árvore CAD com fator e verificação PDF/DXF)
                     ' ═══════════════════════════════════════════════════════════
-                    Dim labelResumo As New Label()
-                    ListarEstruturaBomMateriais(dgvBOM, ProgressBar1, labelStatus, labelResumo)
+                    ListarEstruturaComTodasPropriedadesBlank(dgvBOM, ProgressBar1, lblStatusOperacao, Me.lblResumo)
 
                     ' Verifica se obteve dados
                     Dim dtBom As DataTable = TryCast(dgvBOM.DataSource, DataTable)
                     If dtBom Is Nothing OrElse dtBom.Rows.Count = 0 Then
                         MessageBox.Show("A estrutura (BOM) retornou vazia.", "SINCO - BOM", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                     Else
-                        Dim qtdPecas As Integer = dtBom.Select("TipoLinha = 'PECA'").Length
-                        Dim qtdMat As Integer = dtBom.Select("TipoLinha = 'MATERIAL'").Length
-                        Dim qtdProc As Integer = dtBom.Select("TipoLinha = 'PROCESSO'").Length
+                        Dim totalPecas As Integer = dtBom.Rows.Count
+                        Dim totalQtd As Double = 0
+                        For Each r As DataRow In dtBom.Rows
+                            If dtBom.Columns.Contains("QtdeTotal") AndAlso r("QtdeTotal") IsNot Nothing AndAlso Not IsDBNull(r("QtdeTotal")) Then
+                                totalQtd += Convert.ToDouble(r("QtdeTotal"))
+                            End If
+                        Next
                         MessageBox.Show(
-                            "Leitura da BOM finalizada com sucesso!" & vbCrLf & vbCrLf &
-                            "  Peças: " & qtdPecas.ToString() & vbCrLf &
-                            "  Materiais: " & qtdMat.ToString() & vbCrLf &
-                            "  Processos: " & qtdProc.ToString() & vbCrLf &
-                            "  Total de linhas: " & dtBom.Rows.Count.ToString(),
+                            "Estrutura (BOM) carregada com sucesso!" & vbCrLf & vbCrLf &
+                            "  Itens na estrutura: " & totalPecas.ToString() & vbCrLf &
+                            "  Quantidade Total acumulada: " & totalQtd.ToString("N0"),
                             "SINCO - BOM Concluída", MessageBoxButtons.OK, MessageBoxIcon.Information)
                     End If
 
                 Finally
-                    Try : Me.Controls.Remove(labelStatus) : Catch : End Try
                     ProgressBar1.Visible = False
+                    lblStatusOperacao.Text = "Pronto"
                     ultimoDocumentoAnalisado = ""
                     timerAtualizacao.Start()
                 End Try
@@ -2101,6 +2501,61 @@ Public Class frmDadosPecaCorrente
         End Try
     End Sub
 
+    Private Sub btnLimparBOM_Click(sender As Object, e As EventArgs) Handles btnLimparBOM.Click
+        Try
+            If dgvBOM IsNot Nothing Then
+                dgvBOM.DataSource = Nothing
+                dgvBOM.Visible = False
+            End If
+            If pnlStatus IsNot Nothing Then
+                pnlStatus.Visible = False
+            End If
+            lblResumo.Text = "-----"
+            Me.ClientSize = New Size(1240, 365)
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Sub dgvBOM_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs) Handles dgvBOM.CellFormatting
+        Try
+            If dgvBOM Is Nothing OrElse e.RowIndex < 0 Then Exit Sub
+
+            ' Formata a coluna "Arquivo" com hierarquia visual de árvore segundo o Nível
+            If dgvBOM.Columns(e.ColumnIndex).Name = "Arquivo" Then
+                Dim nivelVal = dgvBOM.Rows(e.RowIndex).Cells("Nivel").Value
+                If nivelVal IsNot Nothing AndAlso IsNumeric(nivelVal) Then
+                    Dim niv As Integer = CInt(nivelVal)
+                    If niv > 0 Then
+                        Dim indent As String = New String(" "c, niv * 4) & "├── "
+                        e.Value = indent & Convert.ToString(e.Value)
+                        e.FormattingApplied = True
+                    End If
+                End If
+            End If
+
+            ' Destaque para montagem raiz (Nível 0)
+            Dim nivelRowVal = dgvBOM.Rows(e.RowIndex).Cells("Nivel").Value
+            If nivelRowVal IsNot Nothing AndAlso IsNumeric(nivelRowVal) Then
+                Dim niv As Integer = CInt(nivelRowVal)
+                If niv = 0 Then
+                    dgvBOM.Rows(e.RowIndex).DefaultCellStyle.BackColor = Color.FromArgb(241, 245, 249)
+                    dgvBOM.Rows(e.RowIndex).DefaultCellStyle.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
+                End If
+            End If
+        Catch
+        End Try
+    End Sub
+
+    Private Sub dgvBOM_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs) Handles dgvBOM.CellValueChanged
+        Try
+            If dgvBOM Is Nothing OrElse e.RowIndex < 0 Then Exit Sub
+            If dgvBOM.Columns(e.ColumnIndex).Name = "Fator" Then
+                RecalcularQuantidadesBOM(dgvBOM, lblResumo)
+            End If
+        Catch
+        End Try
+    End Sub
+
     Private Sub ExibirGridBOM(dtBom As DataTable)
         Me.SuspendLayout()
         Try
@@ -2108,8 +2563,8 @@ Public Class frmDadosPecaCorrente
             If dgvBOM Is Nothing Then
                 dgvBOM = New System.Windows.Forms.DataGridView()
                 dgvBOM.Name = "dgvBOM"
-                dgvBOM.Location = New System.Drawing.Point(8, 290)
-                dgvBOM.Size = New System.Drawing.Size(1109, 280)
+                dgvBOM.Location = New System.Drawing.Point(12, 314)
+                dgvBOM.Size = New System.Drawing.Size(1216, 280)
                 dgvBOM.Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top Or AnchorStyles.Bottom
                 dgvBOM.AllowUserToAddRows = False
                 dgvBOM.ReadOnly = True
@@ -2150,18 +2605,22 @@ Public Class frmDadosPecaCorrente
                 dgvBOM.Columns.Add(colPdf)
             End If
 
-            ' --- Expande o formulário ---
+            ' --- Expande o formulário para 1240px ---
             Me.MinimumSize = System.Drawing.Size.Empty
             Me.MaximumSize = System.Drawing.Size.Empty
-            Me.ClientSize = New System.Drawing.Size(1120, 590)
+            Me.ClientSize = New System.Drawing.Size(1240, 640)
 
-            ' --- Posiciona o grid ---
-            dgvBOM.Location = New System.Drawing.Point(8, 290)
-            dgvBOM.Size = New System.Drawing.Size(Me.ClientSize.Width - 16, Me.ClientSize.Height - 300)
+            ' --- Posiciona o grid acima da barra de status para nunca cobrir o progresso ---
+            Dim statusH As Integer = If(pnlStatus IsNot Nothing, pnlStatus.Height, 38)
+            dgvBOM.Location = New System.Drawing.Point(12, 314)
+            dgvBOM.Size = New System.Drawing.Size(Me.ClientSize.Width - 24, Me.ClientSize.Height - 314 - statusH - 6)
 
-            ' --- Torna visível ---
+            ' --- Torna visível e assegura que a barra de status fique à frente ---
             dgvBOM.Visible = True
-            dgvBOM.BringToFront()
+            If pnlStatus IsNot Nothing Then
+                pnlStatus.Visible = True
+                pnlStatus.BringToFront()
+            End If
 
         Finally
             Me.ResumeLayout(True)
@@ -2983,19 +3442,103 @@ Module ModListarComponentesMontagem
 
             tabelaOriginalBOM = tabela.Copy()
 
-            Dim ocultar() As String = {
-    "TipoArquivo", "CaminhoCompleto", "Categoria", "Gerente",
-    "Autor", "Empresa", "Data", "DataR", "Data1",
-    "Revision", "CutSizeX", "CutSizeY", "Mass",
-    "Área_de_superfície", "Area_de_superficie", "Bloqueado",
-    "RNC", "PesoTotal", "AreaPinturaTotal",
-    "TipoLinha", "CodMatFabricante", "DescDetal", "QtdeMaterial", "PesoMaterial"
-}
+            ' ── Garante colunas de status de arquivos no início do grid ──
+            If Not dgv.Columns.Contains("dgvdxf") Then
+                Dim colDxf As New DataGridViewImageColumn() With {
+                    .Name = "dgvdxf",
+                    .HeaderText = "DXF",
+                    .Image = My.Resources.sem_icone,
+                    .ImageLayout = DataGridViewImageCellLayout.Zoom,
+                    .Width = 42,
+                    .ReadOnly = True
+                }
+                dgv.Columns.Insert(0, colDxf)
+            End If
 
+            If Not dgv.Columns.Contains("dgvpdf") Then
+                Dim colPdf As New DataGridViewImageColumn() With {
+                    .Name = "dgvpdf",
+                    .HeaderText = "PDF",
+                    .Image = My.Resources.sem_icone,
+                    .ImageLayout = DataGridViewImageCellLayout.Zoom,
+                    .Width = 42,
+                    .ReadOnly = True
+                }
+                dgv.Columns.Insert(1, colPdf)
+            End If
 
-            For Each c In ocultar
-                If dgv.Columns.Contains(c) Then dgv.Columns(c).Visible = False
+            ' ── Regra Estrita de Colunas Visíveis: apenas até "Qtde Total" (oculta Material, Espessura, Tipo e extras) ──
+            Dim colunasVisiveis As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
+                "dgvdxf", "dgvpdf", "Nivel", "Arquivo", "Título", "Qtde", "Fator", "QtdeTotal"
+            }
+
+            For Each col As DataGridViewColumn In dgv.Columns
+                col.Visible = colunasVisiveis.Contains(col.Name)
             Next
+
+            ' ── Ordenação e estilização das 8 colunas visíveis da árvore ──
+            Try
+                If dgv.Columns.Contains("dgvdxf") Then
+                    dgv.Columns("dgvdxf").DisplayIndex = 0
+                    dgv.Columns("dgvdxf").Width = 42
+                    dgv.Columns("dgvdxf").HeaderText = "DXF"
+                End If
+                If dgv.Columns.Contains("dgvpdf") Then
+                    dgv.Columns("dgvpdf").DisplayIndex = 1
+                    dgv.Columns("dgvpdf").Width = 42
+                    dgv.Columns("dgvpdf").HeaderText = "PDF"
+                End If
+                If dgv.Columns.Contains("Nivel") Then
+                    dgv.Columns("Nivel").DisplayIndex = 2
+                    dgv.Columns("Nivel").Width = 45
+                    dgv.Columns("Nivel").HeaderText = "Nív."
+                    dgv.Columns("Nivel").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
+                End If
+                If dgv.Columns.Contains("Arquivo") Then
+                    dgv.Columns("Arquivo").DisplayIndex = 3
+                    dgv.Columns("Arquivo").HeaderText = "Arquivo CAD"
+                End If
+                If dgv.Columns.Contains("Título") Then
+                    dgv.Columns("Título").DisplayIndex = 4
+                    dgv.Columns("Título").HeaderText = "Título / Descrição"
+                End If
+                If dgv.Columns.Contains("Qtde") Then
+                    dgv.Columns("Qtde").DisplayIndex = 5
+                    dgv.Columns("Qtde").HeaderText = "Qtde Unit."
+                    dgv.Columns("Qtde").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
+                End If
+                If dgv.Columns.Contains("Fator") Then
+                    dgv.Columns("Fator").DisplayIndex = 6
+                    dgv.Columns("Fator").HeaderText = "Fator"
+                    dgv.Columns("Fator").Width = 55
+                    dgv.Columns("Fator").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
+                    dgv.Columns("Fator").DefaultCellStyle.BackColor = Color.FromArgb(254, 243, 199)
+                    dgv.Columns("Fator").DefaultCellStyle.Font = New Font(dgv.Font, FontStyle.Bold)
+                End If
+                If dgv.Columns.Contains("QtdeTotal") Then
+                    dgv.Columns("QtdeTotal").DisplayIndex = 7
+                    dgv.Columns("QtdeTotal").HeaderText = "Qtde Total"
+                    dgv.Columns("QtdeTotal").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
+                End If
+
+                ' Torna o grid interativo permitindo edição EXCLUSIVA da coluna Fator
+                dgv.ReadOnly = False
+                For Each col As DataGridViewColumn In dgv.Columns
+                    If col.Name = "Fator" Then
+                        col.ReadOnly = False
+                    Else
+                        col.ReadOnly = True
+                    End If
+                Next
+
+                ' ── Verificação em lote de arquivos PDF e DXF existentes ──
+                VerificarArquivosPDF_DXF(dgv)
+
+                ' ── Recalcula quantidades e atualiza o resumo ──
+                RecalcularQuantidadesBOM(dgv, lblResumo)
+            Catch exCfg As Exception
+                RegistrarErro("Configuração das colunas e verificação da BOM", exCfg)
+            End Try
 
             '============================================================
             ' 🔹 UI - final (incluindo os totais)
@@ -4092,5 +4635,144 @@ Module ModListarComponentesMontagem
 
 
 
+
+
+    ''' <summary>
+    ''' Verifica a existência dos arquivos DXF e PDF de cada linha no disco,
+    ''' atualizando os ícones de dgvdxf e dgvpdf.
+    ''' </summary>
+    Public Sub VerificarArquivosPDF_DXF(ByVal dgv As DataGridView, Optional ByVal pastaDestinoLote As String = "")
+        Try
+            If dgv Is Nothing OrElse dgv.Rows.Count = 0 Then Exit Sub
+
+            Dim cacheDXF As New Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
+            Dim cachePDF As New Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
+
+            Dim imgDXF As Image = My.Resources.dxf
+            Dim imgPDF As Image = My.Resources.pdf
+            Dim imgSemIcone As Image = My.Resources.sem_icone
+
+            dgv.SuspendLayout()
+
+            For Each row As DataGridViewRow In dgv.Rows
+                If row.IsNewRow Then Continue For
+
+                Dim caminho As String = ""
+                If dgv.Columns.Contains("CaminhoCompleto") AndAlso row.Cells("CaminhoCompleto").Value IsNot Nothing Then
+                    caminho = row.Cells("CaminhoCompleto").Value.ToString().Trim()
+                End If
+
+                If String.IsNullOrEmpty(caminho) Then Continue For
+
+                Dim ext As String = IO.Path.GetExtension(caminho).ToLower()
+                Dim pastaOrigem As String = IO.Path.GetDirectoryName(caminho)
+                Dim nomeBase As String = IO.Path.GetFileNameWithoutExtension(caminho)
+
+                ' ── 1. Verificação DXF (chapa .psm e peça .par) ──
+                Dim iconeDXF As Image = imgSemIcone
+                If ext = ".psm" OrElse ext = ".par" Then
+                    Dim dxfOrigem As String = IO.Path.Combine(pastaOrigem, nomeBase & ".dxf")
+                    Dim dExiste As Boolean = False
+
+                    If Not cacheDXF.TryGetValue(dxfOrigem, dExiste) Then
+                        dExiste = File.Exists(dxfOrigem)
+                        If Not dExiste AndAlso Not String.IsNullOrEmpty(pastaDestinoLote) Then
+                            dExiste = File.Exists(IO.Path.Combine(pastaDestinoLote, nomeBase & ".dxf"))
+                        End If
+                        cacheDXF(dxfOrigem) = dExiste
+                    End If
+
+                    If dExiste Then iconeDXF = imgDXF
+                End If
+
+                ' ── 2. Verificação PDF (.par, .psm, .asm) ──
+                Dim iconePDF As Image = imgSemIcone
+                Dim pdfOrigem As String = IO.Path.Combine(pastaOrigem, nomeBase & ".pdf")
+                Dim pExiste As Boolean = False
+
+                If Not cachePDF.TryGetValue(pdfOrigem, pExiste) Then
+                    pExiste = File.Exists(pdfOrigem)
+                    If Not pExiste AndAlso Not String.IsNullOrEmpty(pastaDestinoLote) Then
+                        pExiste = File.Exists(IO.Path.Combine(pastaDestinoLote, nomeBase & ".pdf"))
+                    End If
+                    cachePDF(pdfOrigem) = pExiste
+                End If
+
+                If pExiste Then iconePDF = imgPDF
+
+                If dgv.Columns.Contains("dgvdxf") Then row.Cells("dgvdxf").Value = iconeDXF
+                If dgv.Columns.Contains("dgvpdf") Then row.Cells("dgvpdf").Value = iconePDF
+            Next
+
+        Catch ex As Exception
+        Finally
+            If dgv IsNot Nothing Then
+                dgv.ResumeLayout()
+            End If
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Recalcula dinamicamente as quantidades totais, pesos e áreas de pintura na árvore de produtos
+    ''' com base no fator de cada linha e seus níveis hierárquicos acumulados.
+    ''' </summary>
+    Public Sub RecalcularQuantidadesBOM(ByVal dgv As DataGridView, ByVal lblResumoTotal As Label)
+        Try
+            If dgv Is Nothing OrElse dgv.Rows.Count = 0 Then Exit Sub
+            If Not dgv.Columns.Contains("Qtde") OrElse Not dgv.Columns.Contains("Fator") Then Exit Sub
+
+            Dim totalPecasGeral As Double = 0.0
+            Dim multPorNivel As New Dictionary(Of Integer, Double)()
+            multPorNivel(0) = 1.0
+
+            For Each row As DataGridViewRow In dgv.Rows
+                If row.IsNewRow Then Continue For
+
+                Dim niv As Integer = 0
+                If dgv.Columns.Contains("Nivel") AndAlso row.Cells("Nivel").Value IsNot Nothing Then
+                    Integer.TryParse(row.Cells("Nivel").Value.ToString(), niv)
+                End If
+
+                Dim fat As Double = 1.0
+                If row.Cells("Fator").Value IsNot Nothing Then
+                    Double.TryParse(row.Cells("Fator").Value.ToString().Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, fat)
+                End If
+                If fat <= 0 Then fat = 1.0 : row.Cells("Fator").Value = 1.0
+
+                Dim qtdUnit As Double = 1.0
+                If row.Cells("Qtde").Value IsNot Nothing Then
+                    Double.TryParse(row.Cells("Qtde").Value.ToString().Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, qtdUnit)
+                End If
+
+                Dim multPai As Double = If(niv > 0 AndAlso multPorNivel.ContainsKey(niv - 1), multPorNivel(niv - 1), 1.0)
+                multPorNivel(niv) = multPai * fat
+
+                Dim qtdTot As Double = qtdUnit * multPorNivel(niv)
+                If dgv.Columns.Contains("QtdeTotal") Then
+                    row.Cells("QtdeTotal").Value = qtdTot
+                End If
+
+                If dgv.Columns.Contains("Mass") AndAlso dgv.Columns.Contains("PesoTotal") Then
+                    Dim mass As Double = 0.0
+                    Double.TryParse(Convert.ToString(row.Cells("Mass").Value).Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, mass)
+                    row.Cells("PesoTotal").Value = mass * qtdTot
+                End If
+
+                If dgv.Columns.Contains("Área_de_superfície") AndAlso dgv.Columns.Contains("AreaPinturaTotal") Then
+                    Dim area As Double = 0.0
+                    Double.TryParse(Convert.ToString(row.Cells("Área_de_superfície").Value).Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, area)
+                    row.Cells("AreaPinturaTotal").Value = area * qtdTot
+                End If
+
+                totalPecasGeral += qtdTot
+            Next
+
+            If lblResumoTotal IsNot Nothing Then
+                lblResumoTotal.Text = $"Total: {totalPecasGeral:N0} pçs"
+            End If
+
+        Catch ex As Exception
+        End Try
+    End Sub
 
 End Module

@@ -44,47 +44,42 @@ Module MacroLeituraArquivoAtivo
         ''    frm.Dispose()
         ''End Try
 
-        frmLogin.ShowDialog()
+        ' 🔹 Registra o filtro de mensagens OLE para evitar rejeições COM (0x8001010A / RPC_E_SERVERCALL_RETRYLATER)
+        OleMessageFilter.Register()
 
+        ' 🔹 Garante que o Solid Edge esteja ativo e 100% interativo para o usuário
+        SolidEdgeFactory.AtivarSolidEdge()
 
+        Using login As New frmLogin()
+            If login.ShowDialog() <> DialogResult.OK Then
+                Return
+            End If
+        End Using
 
+        ' 🔹 Define posição no segundo monitor (se disponível) ou centraliza
+        Dim monitores = Screen.AllScreens
+        If monitores.Length > 1 Then
+            frm.StartPosition = FormStartPosition.Manual
+            frm.Location = New System.Drawing.Point(monitores(1).Bounds.X + 100, monitores(1).Bounds.Y + 100)
+        Else
+            frm.StartPosition = FormStartPosition.CenterScreen
+        End If
 
-
+        ' 🔹 Inicia a aplicação no loop nativo de mensagens do Windows Forms
+        ' Sem nenhum loop de Sleep(50), sem modalidade presa, permitindo ao usuário interagir livremente com o Solid Edge
+        System.Windows.Forms.Application.Run(frm)
     End Sub
 
-    Public Sub MostrarFormulario(ByVal frm As Form)
+    Public Sub MostrarFormulario(ByVal formObj As Form)
         Try
-
-            ' 🔹 Exibe o formulário fora do Solid Edge
-            frm.Show()
-            '''' frm.TopMost = True
-
-            ' 🔹 Define posição no segundo monitor (se disponível)
-            Dim monitores = Screen.AllScreens
-            If monitores.Length > 1 Then
-                ' Posiciona o formulário no segundo monitor (lado direito)
-                frm.StartPosition = FormStartPosition.Manual
-                frm.Location = New System.Drawing.Point(monitores(1).Bounds.X + 100, monitores(1).Bounds.Y + 100)
-            Else
-                ' Se só existir um monitor, centraliza
-                frm.StartPosition = FormStartPosition.CenterScreen
-            End If
-
-            ' 🔹 Mantém o formulário vivo sem travar o Solid Edge
-            Do While frm.Visible
-                System.Windows.Forms.Application.DoEvents()
-                Thread.Sleep(50)
-            Loop
-
+            formObj.Show()
+            formObj.BringToFront()
         Catch ex As Exception
-            MsgBox("Erro: " & ex.Message, MsgBoxStyle.Critical)
-        Finally
-            frm.Dispose()
         End Try
     End Sub
 
 
-    Public Function DadosDesenhoCorrente()
+    Public Sub DadosDesenhoCorrente()
 
 
         Try
@@ -95,7 +90,7 @@ Module MacroLeituraArquivoAtivo
             ' 🔹 Verifica se há documento aberto
             If app.Documents.Count = 0 Then
                 MsgBox("Nenhum documento aberto no Solid Edge.", MsgBoxStyle.Exclamation)
-                Exit Function
+                Exit Sub
             End If
 
             ' 🔹 Obtém documento ativo
@@ -144,7 +139,7 @@ Module MacroLeituraArquivoAtivo
 
             Else
                 MsgBox("O documento ativo não é um arquivo de peça (.PAR) nem de chapa (.PSM).", MsgBoxStyle.Exclamation)
-                Exit Function
+                Exit Sub
             End If
 
             ' ==============================================================
@@ -165,7 +160,7 @@ Module MacroLeituraArquivoAtivo
         End Try
 
 
-    End Function
+    End Sub
 
     Public Sub DxfArquivoCorrente()
         Try
@@ -650,7 +645,7 @@ Module MacroLeituraArquivoAtivo
 
 
 
-    Public Function AbriDetalhamentoDesenhoCorrente()
+    Public Sub AbriDetalhamentoDesenhoCorrente()
 
 
         Try
@@ -661,7 +656,7 @@ Module MacroLeituraArquivoAtivo
             ' 🔹 Verifica se há documento aberto
             If app.Documents.Count = 0 Then
                 MsgBox("Nenhum documento aberto no Solid Edge.", MsgBoxStyle.Exclamation)
-                Exit Function
+                Exit Sub
             End If
 
             ' 🔹 Obtém documento ativo
@@ -694,7 +689,7 @@ Module MacroLeituraArquivoAtivo
         End Try
 
 
-    End Function
+    End Sub
 
 
     Public Sub PlanificarDesenhoCorrenteLote(Optional modoDestino As Integer = 0)
@@ -1589,45 +1584,49 @@ Module MacroLeituraArquivoAtivo
     End Sub
 
     Public Sub SalvarAssocicaoPDFAPI(nomeBase As String, caminhoPDF As String)
-        Try
-            ' 1. Verificar se o registro já existe no banco MySQL para evitar repetição
-            Dim urlDB As String = caminhoPDF.Replace("\", "\\")
-            Dim queryExist As String = $"SELECT id FROM produtos_docs WHERE produto_codigo = '{nomeBase}' AND url_arquivo = '{urlDB}'"
-            
-            Dim dt As System.Data.DataTable = Nothing
-            Try
-                cl_BancoDados.AbrirBanco()
-                dt = cl_BancoDados.CarregarDados(queryExist)
-                cl_BancoDados.FecharBanco()
-            Catch
-                ' Se falhar o banco direto, segue em frente pois o app já usa
-            End Try
+        System.Threading.ThreadPool.QueueUserWorkItem(
+            Sub()
+                Try
+                    ' 1. Verificar se o registro já existe no banco MySQL para evitar repetição
+                    Dim urlDB As String = caminhoPDF.Replace("\", "\\")
+                    Dim queryExist As String = $"SELECT id FROM produtos_docs WHERE produto_codigo = '{nomeBase}' AND url_arquivo = '{urlDB}'"
+                    
+                    Dim dt As System.Data.DataTable = Nothing
+                    Try
+                        cl_BancoDados.AbrirBanco()
+                        dt = cl_BancoDados.CarregarDados(queryExist)
+                        cl_BancoDados.FecharBanco()
+                    Catch
+                        ' Se falhar o banco direto, segue em frente pois o app já usa
+                    End Try
 
-            If dt Is Nothing OrElse dt.Rows.Count = 0 Then
-                ' 2. Enviar via POST para a API Node.js (que extrai os metadados com IA)
-                Dim postUrl As String = "http://192.168.1.77:3001/api/docs"
-                Dim request As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
-                request.Method = "POST"
-                request.ContentType = "application/json"
-                
-                Dim urlEscapada As String = caminhoPDF.Replace("\", "\\").Replace("""", "\""")
-                Dim titulo As String = nomeBase & ".pdf"
-                Dim postData As String = "{""produto_codigo"":""" & nomeBase & """,""titulo"":""" & titulo & """,""url_arquivo"":""" & urlEscapada & """,""tipo"":""Desenho""}"
+                    If dt Is Nothing OrElse dt.Rows.Count = 0 Then
+                        ' 2. Enviar via POST para a API Node.js (que extrai os metadados com IA)
+                        Dim postUrl As String = "http://192.168.1.77:3001/api/docs"
+                        Dim request As System.Net.HttpWebRequest = CType(System.Net.WebRequest.Create(postUrl), System.Net.HttpWebRequest)
+                        request.Method = "POST"
+                        request.ContentType = "application/json"
+                        request.Timeout = 10000 ' 10 segundos de timeout para não prender threads
+                        
+                        Dim urlEscapada As String = caminhoPDF.Replace("\", "\\").Replace("""", "\""")
+                        Dim titulo As String = nomeBase & ".pdf"
+                        Dim postData As String = "{""produto_codigo"":""" & nomeBase & """,""titulo"":""" & titulo & """,""url_arquivo"":""" & urlEscapada & """,""tipo"":""Desenho""}"
 
-                Dim byteArray As Byte() = System.Text.Encoding.UTF8.GetBytes(postData)
-                request.ContentLength = byteArray.Length
+                        Dim byteArray As Byte() = System.Text.Encoding.UTF8.GetBytes(postData)
+                        request.ContentLength = byteArray.Length
 
-                Using dataStream As System.IO.Stream = request.GetRequestStream()
-                    dataStream.Write(byteArray, 0, byteArray.Length)
-                End Using
+                        Using dataStream As System.IO.Stream = request.GetRequestStream()
+                            dataStream.Write(byteArray, 0, byteArray.Length)
+                        End Using
 
-                Using response As System.Net.HttpWebResponse = CType(request.GetResponse(), System.Net.HttpWebResponse)
-                    ' O Node.js se encarrega de ler e inserir
-                End Using
-            End If
-        Catch ex As Exception
-            System.Diagnostics.Debug.WriteLine("Erro ao associar PDF na API Node.js: " & ex.Message)
-        End Try
+                        Using response As System.Net.HttpWebResponse = CType(request.GetResponse(), System.Net.HttpWebResponse)
+                            ' O Node.js se encarrega de ler e inserir
+                        End Using
+                    End If
+                Catch ex As Exception
+                    System.Diagnostics.Debug.WriteLine("Erro ao associar PDF na API Node.js: " & ex.Message)
+                End Try
+            End Sub)
     End Sub
     ''' <summary>
     ''' Exporta PDF diretamente de um arquivo .dft (detalhamento) usando o caminho explicito.

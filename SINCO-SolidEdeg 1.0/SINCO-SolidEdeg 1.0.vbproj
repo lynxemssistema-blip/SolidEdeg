@@ -282,22 +282,16 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Protheus\frmCadProtheusProd.Designer.vb">
-      <DependentUpon>frmCadProtheusProd.vb</DependentUpon>
-    </Compile>
-    <Compile Include="Protheus\frmCadProtheusProd.vb">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="SolidEdgeReaderService.vb" />
     <Compile Include="ClBancoDados.vb" />
     <Compile Include="clDadosArquivoCorrente.vb" />
     <Compile Include="ClDadosDesenhoPdf.vb" />
     <Compile Include="ClExcel.vb" />
     <Compile Include="ClIA.vb" />
-    <Compile Include="ClOrdemServico.vb" />
+    <Compile Include="ClModelos.vb" />
     <Compile Include="clPdf.vb" />
     <Compile Include="SolidEdgeFactory.vb" />
-    <Compile Include="Protheus\ClProtheus.vb" />
+    <Compile Include="OleMessageFilter.vb" />
     <Compile Include="clUsuario.vb" />
     <Compile Include="frmDadosPecaCorrente.Designer.vb">
       <DependentUpon>frmDadosPecaCorrente.vb</DependentUpon>
@@ -305,34 +299,13 @@
     <Compile Include="frmDadosPecaCorrente.vb">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frmDesenhosGabaritos.Designer.vb">
-      <DependentUpon>frmDesenhosGabaritos.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmDesenhosGabaritos.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmErros.Designer.vb">
-      <DependentUpon>frmErros.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmErros.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmFichaTecnica.Designer.vb">
-      <DependentUpon>frmFichaTecnica.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmFichaTecnica.vb">
+    <Compile Include="frmEstruturaProduto.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="frmLogin.Designer.vb">
       <DependentUpon>frmLogin.vb</DependentUpon>
     </Compile>
     <Compile Include="frmLogin.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmOpcaoLiberacaoOrdemServico.Designer.vb">
-      <DependentUpon>frmOpcaoLiberacaoOrdemServico.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmOpcaoLiberacaoOrdemServico.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="MacroLeituraArquivoAtivo.vb" />
@@ -353,61 +326,19 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <Compile Include="Protheus\frmListaDesenhoCliente.Designer.vb">
-      <DependentUpon>frmListaDesenhoCliente.vb</DependentUpon>
-    </Compile>
-    <Compile Include="Protheus\frmListaDesenhoCliente.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Protheus\frmMaterialProtheus.Designer.vb">
-      <DependentUpon>frmMaterialProtheus.vb</DependentUpon>
-    </Compile>
-    <Compile Include="Protheus\frmMaterialProtheus.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Protheus\frmProjeto-Tag.Designer.vb">
-      <DependentUpon>frmProjeto-Tag.vb</DependentUpon>
-    </Compile>
-    <Compile Include="Protheus\frmProjeto-Tag.vb">
-      <SubType>Form</SubType>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="frmDadosPecaCorrente.resx">
       <DependentUpon>frmDadosPecaCorrente.vb</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="frmDesenhosGabaritos.resx">
-      <DependentUpon>frmDesenhosGabaritos.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmErros.resx">
-      <DependentUpon>frmErros.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmFichaTecnica.resx">
-      <DependentUpon>frmFichaTecnica.vb</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="frmLogin.resx">
       <DependentUpon>frmLogin.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmOpcaoLiberacaoOrdemServico.resx">
-      <DependentUpon>frmOpcaoLiberacaoOrdemServico.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
       <CustomToolNamespace>My.Resources</CustomToolNamespace>
       <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Protheus\frmCadProtheusProd.resx">
-      <DependentUpon>frmCadProtheusProd.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Protheus\frmListaDesenhoCliente.resx">
-      <DependentUpon>frmListaDesenhoCliente.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Protheus\frmMaterialProtheus.resx">
-      <DependentUpon>frmMaterialProtheus.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Protheus\frmProjeto-Tag.resx">
-      <DependentUpon>frmProjeto-Tag.vb</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

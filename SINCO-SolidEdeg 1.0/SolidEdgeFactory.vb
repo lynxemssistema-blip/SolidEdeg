@@ -1,4 +1,4 @@
-﻿Imports System.Runtime.InteropServices
+Imports System.Runtime.InteropServices
 
 Public Module SolidEdgeFactory
     Private _app As Object
@@ -27,6 +27,33 @@ Public Module SolidEdgeFactory
         Catch ex As COMException
             Throw New InvalidOperationException("Falha ao iniciar Solid Edge via COM: " & ex.Message, ex)
         End Try
+    End Function
+
+    ''' <summary>
+    ''' Garante que o Solid Edge esteja 100% interativo, visível e acessível ao usuário
+    ''' </summary>
+    Public Sub AtivarSolidEdge()
+        Try
+            Dim se = GetApp(False)
+            If se IsNot Nothing Then
+                Try : CallByName(se, "Visible", CallType.Let, True) : Catch : End Try
+                Try : CallByName(se, "Interactive", CallType.Let, True) : Catch : End Try
+                Try : CallByName(se, "ScreenUpdating", CallType.Let, True) : Catch : End Try
+                Try : CallByName(se, "DisplayAlerts", CallType.Let, True) : Catch : End Try
+                Try
+                    Dim hwnd As IntPtr = CType(CallByName(se, "hWnd", CallType.Get), IntPtr)
+                    If hwnd <> IntPtr.Zero Then
+                        SetForegroundWindow(hwnd)
+                    End If
+                Catch
+                End Try
+            End If
+        Catch
+        End Try
+    End Sub
+
+    <DllImport("user32.dll")>
+    Private Function SetForegroundWindow(hWnd As IntPtr) As Boolean
     End Function
 End Module
 
